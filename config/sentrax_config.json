@@ -1,0 +1,66 @@
+{
+  "system_name": "SentraX Intelligent and Adaptive Road Safety System",
+  "version": "2.4.0",
+  "hardware_parameters": {
+    "esp32": {
+      "pins": {
+        "ir1": 25,
+        "ir2": 26,
+        "ir3": 27,
+        "ir4": 33,
+        "sound": 32,
+        "dht11": 13,
+        "moisture": 35,
+        "us1_trig": 3,
+        "us1_echo": 34,
+        "us2_trig": 14,
+        "us2_echo": 36,
+        "ws2812b_data": 2,
+        "ws2812b_led_count": 60,
+        "speed_button": 15,
+        "eink_cs": 16,
+        "eink_dc": 17,
+        "eink_rst": 21,
+        "eink_busy": 22,
+        "link_rx": 4,
+        "link_tx": 5
+      },
+      "thresholds": {
+        "congestion_time_ms": 5000,
+        "stall_time_ms": 15000,
+        "wrong_way_window_ms": 15000,
+        "demo_overspeed_limit_kmh": 4.0,
+        "normal_speed_rec_kmh": 80.0,
+        "congestion_speed_rec_kmh": 60.0,
+        "wet_speed_rec_kmh": 40.0,
+        "high_temp_rec_kmh": 35.0,
+        "high_temp_threshold_c": 30.0,
+        "high_humidity_threshold_pct": 80.0,
+        "moisture_wet_threshold": 2000,
+        "sensor_distance_meters": 0.30
+      }
+    },
+    "esp8266": {
+      "pins": {
+        "tft_cs": 2,
+        "tft_dc": 0,
+        "rfid_ss": 15,
+        "rfid_rst": 3,
+        "buzzer": 4,
+        "ldr": "A0",
+        "link_rx": 16,
+        "link_tx": 5,
+        "led_data_pin": 1
+      },
+      "thresholds": {
+        "night_threshold": 500,
+        "dark_when_high": true,
+        "rfid_beep_count": 5
+      }
+    }
+  },
+  "ble_parameters": {
+    "service_uuid": "73656e74-7261-7800-0001-000000000000",
+    "devices": ["SENTRAX-ESP32", "SENTRAX-ESP8266"]
+  }
+}
