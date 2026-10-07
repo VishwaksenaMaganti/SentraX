@@ -165,7 +165,7 @@ const float HIGH_TEMP = 30.0;
 const float HIGH_HUMIDITY = 80.0;
 const int MOISTURE_THRESHOLD = 2000;
 
-const unsigned long ALERT_TIME = 5000;
+const unsigned long ALERT_TIME = 7000; // 7 seconds (3s graphic alert + 4s reduced speed sign, then returns to 80 km/h)
 const unsigned long WRONG_WAY_WINDOW = 15000;
 const unsigned long STALL_TIME = 6000; // 6 seconds
 const unsigned long CONGESTION_TIME = 15000;
@@ -178,6 +178,7 @@ const unsigned long SPEED_MEASURE_TIMEOUT = 5000;
 // =====================================================
 
 AlertType activeAlert = NORMAL;
+int alertPhase = 0; // 0 = Single Graphic Alert screen; 1 = Reduced Speed Sign (e.g. 20, 40, 60 km/h)
 unsigned long alertStart = 0;
 float permittedSpeed = NORMAL_SPEED;
 float measuredVehicleSpeed = 0.0;
@@ -256,6 +257,7 @@ void collisionLEDs() {
 void wrongWayLEDs() {
   leds.clear();
   uint32_t red = leds.Color(255, 0, 0);
+
   for (int i = 0; i < 4; i++) {
     setMappedLED(i, red);
   }
@@ -323,103 +325,295 @@ void emergencyPattern() {
 }
 
 // =====================================================
-// REAL-TIME DUAL-SPEED E-INK HUD
-// Displays Risk Calculated Safe Speed & Final Vehicle Speed
+// E-INK SCREENS (SINGLE ALERT SCREENS & REAL-TIME SPEED SIGN)
 // =====================================================
 
-void updateEInkHUD() {
+// 1. NORMAL ROAD SPEED SIGN (Default: 80 KM/H, ROAD CLEAR)
+void showNormalScreen() {
   eink.setFullWindow();
   eink.firstPage();
-
   do {
     eink.fillScreen(GxEPD_WHITE);
     eink.setTextColor(GxEPD_BLACK);
 
-    // 1. HEADER
     eink.setTextSize(2);
-    eink.setCursor(34, 5);
-    eink.println("SENTRAX HUD");
-    eink.drawFastHLine(0, 24, 200, GxEPD_BLACK);
+    eink.setCursor(55, 25);
+    eink.println("SENTRAX");
 
-    // 2. RISK CALCULATED SPEED (SAFE LIMIT)
+    eink.setTextSize(8);
+    String speedText = String((int)permittedSpeed);
+    int width = speedText.length() * 48;
+    int x = (200 - width) / 2;
+    if (x < 0) x = 0;
+
+    eink.setCursor(x, 110);
+    eink.println(speedText);
+
+    eink.setTextSize(2);
+    eink.setCursor(65, 140);
+    eink.println("KM/H");
+
     eink.setTextSize(1);
-    eink.setCursor(10, 29);
-    eink.println("RISK SAFE LIMIT:");
-
-    eink.setTextSize(4);
-    String riskStr = String((int)permittedSpeed);
-    eink.setCursor(22, 42);
-    eink.print(riskStr);
-
-    eink.setTextSize(2);
-    eink.setCursor(120, 52);
-    eink.print("KM/H");
-
-    eink.drawFastHLine(0, 80, 200, GxEPD_BLACK);
-
-    // 3. FINAL VEHICLE SPEED (MEASURED SPEED)
-    eink.setTextSize(1);
-    eink.setCursor(10, 86);
-    eink.println("FINAL VEHICLE SPEED:");
-
-    eink.setTextSize(4);
-    String speedStr;
-    if (measuredVehicleSpeed >= 10.0) {
-      speedStr = String((int)measuredVehicleSpeed);
-    } else {
-      speedStr = String(measuredVehicleSpeed, 1);
-    }
-    eink.setCursor(22, 100);
-    eink.print(speedStr);
-
-    eink.setTextSize(2);
-    eink.setCursor(120, 110);
-    eink.print("KM/H");
-
-    eink.drawFastHLine(0, 142, 200, GxEPD_BLACK);
-
-    // 4. ROAD CONDITION & ALERT STATUS BANNER
-    String alertText = "ROAD CLEAR";
-    bool isWarning = false;
-
-    if (activeAlert == COLLISION) { alertText = "COLLISION AHEAD!"; isWarning = true; }
-    else if (activeAlert == WRONG_WAY) { alertText = "WRONG-WAY ENTRY!"; isWarning = true; }
-    else if (activeAlert == STALLED_VEHICLE || stallAlertActive) { alertText = "STALLED VEHICLE!"; isWarning = true; }
-    else if (activeAlert == CONGESTION || congestionActive) { alertText = "CONGESTION QUEUE"; isWarning = true; }
-    else if (activeAlert == WET_ROAD || wetRoadActive) { alertText = "ROAD SURFACE WET"; isWarning = true; }
-    else if (activeAlert == HIGH_TEMP_ALERT) { alertText = "HIGH ROAD TEMP!"; isWarning = true; }
-    else if (activeAlert == HIGH_HUMIDITY_ALERT) { alertText = "HIGH HUMIDITY!"; isWarning = true; }
-    else if (activeAlert == EMERGENCY) { alertText = "EMERGENCY VEHICLE"; isWarning = true; }
-    else if (activeAlert == RASH_DRIVING || (measuredVehicleSpeed > (permittedSpeed + OVERSPEED_MARGIN) && measuredVehicleSpeed > 0)) {
-      alertText = "OVERSPEED DETECTED"; isWarning = true;
-    }
-
-    if (isWarning) {
-      eink.fillRect(0, 146, 200, 54, GxEPD_BLACK);
-      eink.setTextColor(GxEPD_WHITE);
-      eink.setTextSize(2);
-      int tx = (200 - (alertText.length() * 12)) / 2;
-      if (tx < 5) tx = 5;
-      eink.setCursor(tx, 154);
-      eink.println(alertText);
-
-      eink.setTextSize(1);
-      eink.setCursor(25, 182);
-      eink.println("SLOW DOWN & PROCEED");
-    } else {
-      eink.setTextColor(GxEPD_BLACK);
-      eink.setTextSize(2);
-      eink.setCursor(38, 154);
-      eink.println("ROAD CLEAR");
-
-      eink.setTextSize(1);
-      eink.setCursor(45, 180);
-      eink.println("ALL SYSTEMS NORMAL");
-    }
-
+    eink.setCursor(55, 170);
+    eink.println("ROAD CLEAR");
   } while (eink.nextPage());
 }
 
+// 2. DYNAMIC SPEED SIGN (Changes speed sign in real time: 20, 25, 30, 40, 60 km/h)
+void showSpeedSign(float speed, const char* reason) {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.setTextSize(2);
+    eink.setCursor(35, 20);
+    eink.println("SPEED LIMIT");
+
+    eink.setTextSize(8);
+    String s = String((int)speed);
+    int width = s.length() * 48;
+    int x = (200 - width) / 2;
+    if (x < 0) x = 0;
+
+    eink.setCursor(x, 105);
+    eink.println(s);
+
+    eink.setTextSize(2);
+    eink.setCursor(65, 140);
+    eink.println("KM/H");
+
+    eink.setTextSize(1);
+    int rx = (200 - (strlen(reason) * 6)) / 2;
+    if (rx < 5) rx = 5;
+    eink.setCursor(rx, 175);
+    eink.println(reason);
+  } while (eink.nextPage());
+}
+
+// 3. COLLISION ALERT SCREEN (Single alert graphic)
+void showCollisionScreen() {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.drawLine(35, 40, 165, 125, GxEPD_BLACK);
+    eink.drawLine(165, 40, 35, 125, GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(20, 155);
+    eink.println("COLLISION");
+
+    eink.setTextSize(2);
+    eink.setCursor(35, 185);
+    eink.println("LIMIT: 20");
+  } while (eink.nextPage());
+}
+
+// 4. CONGESTION SCREEN
+void showCongestionScreen() {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.drawTriangle(100, 35, 40, 125, 160, 125, GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(15, 155);
+    eink.println("CONGESTION");
+
+    eink.setTextSize(2);
+    eink.setCursor(45, 185);
+    eink.print("SPEED ");
+    eink.print((int)permittedSpeed);
+  } while (eink.nextPage());
+}
+
+// 5. VEHICLE MEASURED SPEED SCREEN
+void showMeasuredSpeed(float speed) {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.setTextSize(2);
+    eink.setCursor(35, 25);
+    eink.println("VEHICLE SPEED");
+
+    eink.setTextSize(7);
+    String s;
+    if (speed >= 10.0) s = String((int)speed);
+    else s = String(speed, 1);
+
+    int width = s.length() * 42;
+    int x = (200 - width) / 2;
+    if (x < 0) x = 0;
+
+    eink.setCursor(x, 110);
+    eink.println(s);
+
+    eink.setTextSize(2);
+    eink.setCursor(65, 140);
+    eink.println("KM/H");
+
+    eink.setTextSize(1);
+    eink.setCursor(40, 170);
+    eink.print("LIMIT ");
+    eink.print((int)permittedSpeed);
+    eink.print(" KM/H");
+  } while (eink.nextPage());
+}
+
+// 6. WRONG WAY SCREEN
+void showWrongWayScreen() {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.drawLine(100, 125, 100, 45, GxEPD_BLACK);
+    eink.drawLine(100, 45, 65, 80, GxEPD_BLACK);
+    eink.drawLine(100, 45, 135, 80, GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(20, 155);
+    eink.println("WRONG WAY");
+
+    eink.setTextSize(2);
+    eink.setCursor(35, 185);
+    eink.println("LIMIT: 25");
+  } while (eink.nextPage());
+}
+
+// 7. RASH DRIVING SCREEN
+void showRashScreen() {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.drawCircle(100, 80, 42, GxEPD_BLACK);
+    eink.drawLine(100, 80, 130, 53, GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(15, 155);
+    eink.println("OVERSPEED!");
+
+    eink.setTextSize(2);
+    eink.setCursor(35, 185);
+    eink.println("SLOW DOWN");
+  } while (eink.nextPage());
+}
+
+// 8. WET ROAD SCREEN
+void showWetScreen() {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.fillCircle(70, 70, 18, GxEPD_BLACK);
+    eink.fillCircle(100, 90, 18, GxEPD_BLACK);
+    eink.fillCircle(130, 70, 18, GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(35, 145);
+    eink.println("ROAD WET");
+
+    eink.setTextSize(2);
+    eink.setCursor(45, 180);
+    eink.println("SPEED 40");
+  } while (eink.nextPage());
+}
+
+// 9. HIGH TEMP SCREEN
+void showHighTempScreen() {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(30, 35);
+    eink.println("HIGH TEMP");
+
+    eink.drawCircle(100, 110, 22, GxEPD_BLACK);
+    eink.drawLine(100, 50, 100, 110, GxEPD_BLACK);
+
+    eink.setTextSize(2);
+    eink.setCursor(45, 160);
+    eink.println("LIMIT: 35");
+  } while (eink.nextPage());
+}
+
+// 10. HUMIDITY SCREEN
+void showHumidityScreen() {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(25, 35);
+    eink.println("HUMIDITY");
+
+    eink.drawCircle(100, 90, 35, GxEPD_BLACK);
+
+    eink.setTextSize(2);
+    eink.setCursor(65, 160);
+    eink.println("SLOW");
+  } while (eink.nextPage());
+}
+
+// 11. EMERGENCY SCREEN
+void showEmergencyScreen() {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.drawLine(40, 45, 160, 125, GxEPD_BLACK);
+    eink.drawLine(160, 45, 40, 125, GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(15, 165);
+    eink.println("EMERGENCY");
+  } while (eink.nextPage());
+}
+
+// 12. STALLED VEHICLE SCREEN
+void showStalledScreen() {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
+
+    eink.drawTriangle(100, 40, 45, 130, 155, 130, GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(15, 155);
+    eink.println("VEHICLE STOP");
+
+    eink.setTextSize(2);
+    eink.setCursor(45, 185);
+    eink.println("LIMIT: 30");
+  } while (eink.nextPage());
+}
+
+// 13. MANUAL BUTTON ULTRASONIC CHECK SCREEN
 void showCalculatingSpeedScreen(float d1, float d2) {
   eink.setFullWindow();
   eink.firstPage();
@@ -428,58 +622,89 @@ void showCalculatingSpeedScreen(float d1, float d2) {
     eink.setTextColor(GxEPD_BLACK);
 
     eink.setTextSize(2);
-    eink.setCursor(22, 12);
-    eink.println("MANUAL US CHECK");
-    eink.drawFastHLine(0, 34, 200, GxEPD_BLACK);
+    eink.setCursor(20, 15);
+    eink.println("MANUAL CHECK");
+    eink.drawFastHLine(0, 38, 200, GxEPD_BLACK);
 
     eink.setTextSize(1);
-    eink.setCursor(15, 45);
+    eink.setCursor(15, 48);
     eink.println("ULTRASONIC SENSOR PING:");
 
     eink.setTextSize(2);
-    eink.setCursor(20, 65);
+    eink.setCursor(20, 68);
     eink.print("US1: ");
     if (d1 > 0) { eink.print((int)d1); eink.print(" cm"); }
-    else eink.print("ACTIVE");
+    else eink.print("OK");
 
-    eink.setCursor(20, 92);
+    eink.setCursor(20, 94);
     eink.print("US2: ");
     if (d2 > 0) { eink.print((int)d2); eink.print(" cm"); }
-    else eink.print("ACTIVE");
+    else eink.print("OK");
 
-    eink.drawFastHLine(0, 122, 200, GxEPD_BLACK);
+    eink.drawFastHLine(0, 124, 200, GxEPD_BLACK);
 
     eink.setTextSize(2);
-    eink.setCursor(28, 138);
+    eink.setCursor(25, 140);
     eink.println("CALCULATING");
 
     eink.setTextSize(1);
-    eink.setCursor(25, 172);
+    eink.setCursor(25, 175);
     eink.println("PASS CAR ACROSS BEAMS...");
   } while (eink.nextPage());
 }
 
-void showNormalScreen() {
-  updateEInkHUD();
-}
-
-void showMeasuredSpeed(float speed) {
-  measuredVehicleSpeed = speed;
-  updateEInkHUD();
-}
+// =====================================================
+// DISPLAY ALERT DISPATCHER
+// =====================================================
 
 void displayAlert(AlertType alert) {
-  activeAlert = alert;
-  updateEInkHUD();
+  switch (alert) {
+    case COLLISION:           showCollisionScreen(); break;
+    case WRONG_WAY:            showWrongWayScreen(); break;
+    case EMERGENCY:            showEmergencyScreen(); break;
+    case RASH_DRIVING:         showRashScreen(); break;
+    case WET_ROAD:             showWetScreen(); break;
+    case HIGH_TEMP_ALERT:      showHighTempScreen(); break;
+    case HIGH_HUMIDITY_ALERT:  showHumidityScreen(); break;
+    case STALLED_VEHICLE:      showStalledScreen(); break;
+    case CONGESTION:           showCongestionScreen(); break;
+    default:                   showNormalScreen(); break;
+  }
+}
+
+// =====================================================
+// SPEED LIMIT CALCULATION (RISK ENGINE LOGIC)
+// =====================================================
+
+void updateSpeedLimit() {
+  if (activeAlert == COLLISION) {
+    permittedSpeed = 20.0;
+  } else if (activeAlert == WRONG_WAY) {
+    permittedSpeed = 25.0;
+  } else if (stallAlertActive || activeAlert == STALLED_VEHICLE) {
+    permittedSpeed = 30.0;
+  } else if (lastHighTemp || activeAlert == HIGH_TEMP_ALERT) {
+    permittedSpeed = 35.0;
+  } else if (wetRoadActive || activeAlert == WET_ROAD) {
+    permittedSpeed = 40.0;
+  } else if (congestionActive || activeAlert == CONGESTION) {
+    permittedSpeed = 60.0;
+  } else {
+    permittedSpeed = NORMAL_SPEED; // 80.0
+  }
 }
 
 // =====================================================
 // TRIGGER ALERT
+// Real-time single alert graphic -> speed sign -> returns to normal
 // =====================================================
 
 void triggerAlert(AlertType alert) {
   activeAlert = alert;
   alertStart = millis();
+  alertPhase = 0; // Phase 0: Show single alert graphic
+
+  updateSpeedLimit(); // Set risk speed immediately (e.g. 20 km/h for collision)
 
   switch (alert) {
     case COLLISION:
@@ -539,29 +764,8 @@ void triggerAlert(AlertType alert) {
       break;
   }
 
+  // Display single alert in real time
   displayAlert(alert);
-}
-
-// =====================================================
-// SPEED LIMIT (RISK ENGINE LOGIC)
-// =====================================================
-
-void updateSpeedLimit() {
-  if (activeAlert == COLLISION) {
-    permittedSpeed = 20.0;
-  } else if (activeAlert == WRONG_WAY) {
-    permittedSpeed = 25.0;
-  } else if (stallAlertActive || activeAlert == STALLED_VEHICLE) {
-    permittedSpeed = 30.0;
-  } else if (lastHighTemp || activeAlert == HIGH_TEMP_ALERT) {
-    permittedSpeed = 35.0;
-  } else if (wetRoadActive || activeAlert == WET_ROAD) {
-    permittedSpeed = 40.0;
-  } else if (congestionActive || activeAlert == CONGESTION) {
-    permittedSpeed = 60.0;
-  } else {
-    permittedSpeed = NORMAL_SPEED; // 80.0
-  }
 }
 
 // =====================================================
@@ -601,8 +805,10 @@ void checkCongestion() {
       congestionActive = false;
       if (activeAlert == CONGESTION) {
         activeAlert = NORMAL;
+        alertPhase = 0;
+        updateSpeedLimit();
         normalLEDs();
-        updateEInkHUD();
+        showNormalScreen(); // Change speed sign back to 80 km/h!
         LinkSerial.println("NORMAL");
       }
     }
@@ -628,7 +834,7 @@ void checkStalledVehicle() {
     }
   }
 
-  // Conflict resolution: If 2+ sensors occupied, it is congestion
+  // Suppress stalled vehicle if traffic queue (occupied >= 2)
   if (occupied >= 2) {
     for (int i = 0; i < 4; i++) {
       irStallActive[i] = false;
@@ -664,12 +870,15 @@ void checkStalledVehicle() {
     triggerAlert(STALLED_VEHICLE);
   }
 
+  // Vehicle cleared
   if (occupied == 0 && stallAlertActive) {
     stallAlertActive = false;
     if (activeAlert == STALLED_VEHICLE) {
       activeAlert = NORMAL;
+      alertPhase = 0;
+      updateSpeedLimit();
       normalLEDs();
-      updateEInkHUD();
+      showNormalScreen(); // Change speed sign back to 80 km/h!
       LinkSerial.println("NORMAL");
     }
   }
@@ -738,7 +947,7 @@ float getDistance(int trig, int echo) {
 }
 
 // =====================================================
-// MANUAL BUTTON CHECK FOR ULTRASONIC SENSOR
+// MANUAL BUTTON CHECK FOR ULTRASONIC SENSOR (GPIO 15)
 // =====================================================
 
 void triggerManualSpeedCheck() {
@@ -795,34 +1004,34 @@ void checkVehicleSpeed() {
       speedDisplayStart = millis();
       speedMeasureMode = false;
 
-      Serial.printf("[SPEED] Measured: %.1f km/h (elapsed: %lu us)\n", speed, elapsed);
+      Serial.printf("[SPEED] Ultrasonic vehicle speed: %.1f km/h (time: %lu us)\n", speed, elapsed);
       LinkSerial.print("SPEED:");
       LinkSerial.println((int)speed);
 
       if (speed > permittedSpeed + OVERSPEED_MARGIN) {
         triggerAlert(RASH_DRIVING);
       } else {
-        updateEInkHUD();
+        showMeasuredSpeed(speed);
       }
     }
 
     vehicleAtUS1 = false;
   }
 
-  // Timeout for object between US1 and US2
+  // Beam timeout
   if (vehicleAtUS1 && (micros() - us1Time > 10000000UL)) {
     vehicleAtUS1 = false;
   }
 
-  // Manual button check timeout: If button was pressed and no car passed in 5s
+  // Manual button check timeout (5 seconds)
   if (speedMeasureMode && (millis() - speedMeasureStart >= SPEED_MEASURE_TIMEOUT)) {
     speedMeasureMode = false;
-    measuredVehicleSpeed = 4.5; // Verified ultrasonic test speed
+    measuredVehicleSpeed = 4.5;
     speedDisplayStart = millis();
-    Serial.println(F("[SPEED] Manual Check complete. Demo speed verified."));
+    Serial.println(F("[SPEED] Manual check verified. Demo speed 4.5 km/h."));
     LinkSerial.print("SPEED:");
     LinkSerial.println(4.5, 1);
-    updateEInkHUD();
+    showMeasuredSpeed(4.5);
   }
 }
 
@@ -868,7 +1077,7 @@ void executeCommand(String cmd) {
     if (spd >= 0.0) {
       measuredVehicleSpeed = spd;
       speedDisplayStart = millis();
-      updateEInkHUD();
+      showMeasuredSpeed(measuredVehicleSpeed);
       if (measuredVehicleSpeed > (permittedSpeed + OVERSPEED_MARGIN)) {
         triggerAlert(RASH_DRIVING);
       }
@@ -881,7 +1090,11 @@ void executeCommand(String cmd) {
     float lmt = cmd.substring(cmd.indexOf(':') + 1).toFloat();
     if (lmt > 0.0) {
       permittedSpeed = lmt;
-      updateEInkHUD();
+      if (activeAlert == NORMAL) {
+        showNormalScreen();
+      } else {
+        showSpeedSign(permittedSpeed, "ADVISORY SPEED");
+      }
     }
   }
   else if (cmd.startsWith("ALERT:COLLISION")) {
@@ -910,13 +1123,14 @@ void executeCommand(String cmd) {
   }
   else if (cmd.startsWith("ALERT:NORMAL") || cmd.startsWith("ALERT:CLEAR") || cmd.startsWith("RESET")) {
     activeAlert = NORMAL;
+    alertPhase = 0;
     congestionActive = false;
     stallAlertActive = false;
     wetRoadActive = false;
     rfidEmergencyActive = false;
     updateSpeedLimit();
     normalLEDs();
-    updateEInkHUD();
+    showNormalScreen();
     LinkSerial.println("NORMAL");
     notifyBLEEvent("NORMAL");
   }
@@ -1031,7 +1245,7 @@ void setup() {
     false
   );
 
-  updateEInkHUD();
+  showNormalScreen();
 
   delay(300);
 
@@ -1108,33 +1322,49 @@ void loop() {
       wetRoadLEDs();
       lastWetFlash = millis();
     }
-
-    if (activeAlert != WET_ROAD) {
-      activeAlert = WET_ROAD;
-      updateEInkHUD();
-    }
   }
 
   if (!wet && lastWet) {
     wetRoadActive = false;
     activeAlert = NORMAL;
+    alertPhase = 0;
     updateSpeedLimit();
     normalLEDs();
-    updateEInkHUD();
+    showNormalScreen();
     LinkSerial.println("NORMAL");
   }
 
   lastWet = wet;
 
-  // Real-time speed limit priority based on risk
+  // Speed limit priority based on risk
   updateSpeedLimit();
 
-  // Congestion display & LED enforcement
+  // Congestion LED enforcement
   if (congestionActive && !wetRoadActive && activeAlert == CONGESTION) {
     congestionLEDs();
   }
 
-  // Alert duration timeout (Non-continuous alerts return to NORMAL after 5s)
+  // ===================================================
+  // TWO-PHASE REAL-TIME ALERT SEQUENCE ON E-INK:
+  // Phase 0 (0..3s): Shows single alert screen (e.g. Collision X, Wrong-way, Stalled)
+  // Phase 1 (3s..7s): Changes speed sign to risk speed (e.g. 20, 25, 30, 40, 60 km/h)
+  // Phase End: Automatically returns back to showNormalScreen() (80 km/h, ROAD CLEAR)
+  // ===================================================
+  if (activeAlert != NORMAL && alertPhase == 0 && (millis() - alertStart >= 3000)) {
+    alertPhase = 1;
+    const char* reason = "HAZARD ADVISORY";
+    if (activeAlert == COLLISION) reason = "ACCIDENT - SLOW DOWN";
+    else if (activeAlert == WRONG_WAY) reason = "WRONG WAY AHEAD";
+    else if (activeAlert == STALLED_VEHICLE) reason = "OBSTACLE ON ROAD";
+    else if (activeAlert == CONGESTION) reason = "TRAFFIC QUEUE";
+    else if (activeAlert == WET_ROAD) reason = "WET ROAD SURFACE";
+    else if (activeAlert == HIGH_TEMP_ALERT) reason = "HIGH ROAD TEMP";
+    else if (activeAlert == EMERGENCY) reason = "EMERGENCY VEHICLE";
+    else if (activeAlert == RASH_DRIVING) reason = "REDUCE SPEED";
+    showSpeedSign(permittedSpeed, reason);
+  }
+
+  // Alert duration timeout (Returns to normal 80 km/h speed sign)
   if (
     activeAlert != NORMAL &&
     activeAlert != WET_ROAD &&
@@ -1143,53 +1373,31 @@ void loop() {
     millis() - alertStart >= ALERT_TIME
   ) {
     activeAlert = NORMAL;
+    alertPhase = 0;
     stallAlertActive = false;
     updateSpeedLimit();
     normalLEDs();
     LinkSerial.println("NORMAL");
-    updateEInkHUD();
+    showNormalScreen(); // Change speed sign back to 80!
   }
 
-  // Speed screen display timeout
+  // Speed screen timeout (Returns to normal 80 km/h speed sign)
   if (
     activeAlert == NORMAL &&
     speedDisplayStart > 0 &&
     millis() - speedDisplayStart >= SPEED_DISPLAY_TIME
   ) {
     speedDisplayStart = 0;
-    updateEInkHUD();
+    showNormalScreen();
     LinkSerial.println("NORMAL");
   }
 
-  // Wet road always has highest priority
+  // Wet road continuous flashing
   if (wetRoadActive) {
-    activeAlert = WET_ROAD;
     if (millis() - lastWetFlash >= WET_FLASH_TIME) {
       wetRoadLEDs();
       lastWetFlash = millis();
     }
-  }
-
-  // ===================================================
-  // REAL-TIME E-INK HUD DISPLAY SYNC
-  // Refreshes when risk speed, measured speed, or alert changes
-  // ===================================================
-  static float lastHUDMeasured = -1.0;
-  static float lastHUDRisk = -1.0;
-  static AlertType lastHUDAlert = (AlertType)-1;
-  static unsigned long lastHUDRefresh = 0;
-
-  bool hudNeedsRefresh = false;
-  if (abs(measuredVehicleSpeed - lastHUDMeasured) >= 0.2) hudNeedsRefresh = true;
-  if (abs(permittedSpeed - lastHUDRisk) >= 0.5) hudNeedsRefresh = true;
-  if (activeAlert != lastHUDAlert) hudNeedsRefresh = true;
-
-  if (hudNeedsRefresh && (millis() - lastHUDRefresh >= 1000)) {
-    lastHUDMeasured = measuredVehicleSpeed;
-    lastHUDRisk = permittedSpeed;
-    lastHUDAlert = activeAlert;
-    lastHUDRefresh = millis();
-    updateEInkHUD();
   }
 
   // ===================================================
