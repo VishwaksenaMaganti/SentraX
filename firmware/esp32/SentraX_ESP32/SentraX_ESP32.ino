@@ -10,6 +10,7 @@
 
 // =====================================================
 // ALERT TYPES
+// (Declared at top for Arduino preprocessor prototype scope)
 // =====================================================
 
 enum AlertType {
@@ -83,7 +84,6 @@ Adafruit_NeoPixel leds(
 
 HardwareSerial LinkSerial(1);
 
-// Waveshare 1.54" V2 (GDEH0154D67 controller - standard):
 GxEPD2_BW<
   GxEPD2_154_D67,
   GxEPD2_154_D67::HEIGHT
@@ -95,16 +95,12 @@ GxEPD2_BW<
     EINK_BUSY
   )
 );
-// NOTE: If you have an older Waveshare 1.54" V1 module (SSD1681 / GDEP0154D00) that remains blank,
-// comment out GxEPD2_154_D67 above and uncomment this line:
-// GxEPD2_BW<GxEPD2_154, GxEPD2_154::HEIGHT> eink(GxEPD2_154(EINK_CS, EINK_DC, EINK_RST, EINK_BUSY));
-
 
 // =====================================================
 // SENTRAX NATIVE BLE GATT DEFINITIONS
 // =====================================================
 
-#define SENTRAX_SERVICE_UUID        "73656e74-7261-7800-0001-000000000000"
+#define SENTRAX_SERVICE_UUID       "73656e74-7261-7800-0001-000000000000"
 #define CHAR_TELEMETRY_UUID        "73656e74-7261-7800-0002-000000000002"
 #define CHAR_EVENTS_UUID           "73656e74-7261-7800-0002-000000000003"
 #define CHAR_COMMANDS_UUID         "73656e74-7261-7800-0002-000000000004"
@@ -116,6 +112,7 @@ BLECharacteristic* pBLECommandsChar = NULL;
 bool bleClientConnected = false;
 unsigned long lastBLETelemetryTime = 0;
 bool rfidEmergencyActive = false;
+unsigned long lastESP8266Heartbeat = 0;
 
 class SentraXBLEServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -149,50 +146,30 @@ void notifyBLEEvent(const char* eventName) {
     pBLEEventsChar->notify();
   }
 }
+
 // =====================================================
 // SPEED SETTINGS
 // =====================================================
 
 const float NORMAL_SPEED = 80.0;
-
-// Congestion speed
 const float CONGESTION_SPEED = 60.0;
-
-// Wet road speed
 const float WET_SPEED = 40.0;
-const float TEMP_SPEED = 35.0;
 
-// Existing traffic levels
 const float TRAFFIC_SPEED_1 = 70.0;
 const float TRAFFIC_SPEED_2 = 60.0;
 const float TRAFFIC_SPEED_3 = 50.0;
 
 // Distance between ultrasonic sensors
-const float SENSOR_DISTANCE = 0.30;
-
-#define SPEED_BUTTON_PIN 15
-const float DEMO_SPEED = 4.5;
-const char VEHICLE_NUMBER[] = "CZO5";
+const float SENSOR_DISTANCE = 0.10;
 
 // Overspeed margin
 const float OVERSPEED_MARGIN = 5.0;
 
-// Mandatory SentraX Change: Toy-car low-speed overspeed detection threshold
-// ROAD RECOMMENDATION remains NORMAL_SPEED (80.0 km/h)
-// Physical toy vehicle demonstration overspeed threshold:
-const float DEMO_OVERSPEED_LIMIT = 4.0;
-
 // =====================================================
-// TEMPERATURE
+// TEMPERATURE & HUMIDITY
 // =====================================================
 
-// Low threshold for demonstration
 const float HIGH_TEMP = 30.0;
-
-// =====================================================
-// HUMIDITY
-// =====================================================
-
 const float HIGH_HUMIDITY = 80.0;
 
 // =====================================================
@@ -205,50 +182,27 @@ const int MOISTURE_THRESHOLD = 2000;
 // TIMERS
 // =====================================================
 
-// Normal alert duration
-const unsigned long ALERT_TIME = 7000;
-const unsigned long SPEED_MEASURE_TIMEOUT = 10000;
-
-// Wrong way window
+const unsigned long ALERT_TIME = 5000;
 const unsigned long WRONG_WAY_WINDOW = 15000;
 
-// Stalled vehicle
+// Stalled vehicle delay: updated to 6 seconds as requested
 const unsigned long STALL_TIME = 6000;
 
-// Congestion
-// Mandatory SentraX Change: 5 seconds congestion detection
-const unsigned long CONGESTION_TIME = 5000;
+// Congestion delay: 15 seconds continuous 2+ sensor blockage
+const unsigned long CONGESTION_TIME = 15000;
 
-// Speed display
 const unsigned long SPEED_DISPLAY_TIME = 5000;
-
-// Wet LED flashing
 const unsigned long WET_FLASH_TIME = 300;
-
-// AlertType enum is declared at the top of this sketch for Arduino preprocessor scope
-
-AlertType activeAlert = NORMAL;
 
 // =====================================================
 // GENERAL STATE
 // =====================================================
 
+AlertType activeAlert = NORMAL;
 unsigned long alertStart = 0;
-
 float permittedSpeed = NORMAL_SPEED;
-
-float measuredVehicleSpeed = DEMO_SPEED;
-
+float measuredVehicleSpeed = 0;
 unsigned long speedDisplayStart = 0;
-
-bool speedMeasureMode = false;
-unsigned long speedMeasureStart = 0;
-bool lastButtonState = HIGH;
-bool lastUS1Detected = false;
-bool lastUS2Detected = false;
-
-bool highTemperatureActive = false;
-
 bool nightMode = false;
 
 // =====================================================
@@ -256,12 +210,9 @@ bool nightMode = false;
 // =====================================================
 
 bool lastCollision = false;
-
 bool lastIR3 = false;
 bool lastIR4 = false;
-
 bool lastWet = false;
-
 bool lastHighTemp = false;
 bool lastHighHumidity = false;
 
@@ -270,7 +221,6 @@ bool lastHighHumidity = false;
 // =====================================================
 
 bool ir4FirstDetected = false;
-
 unsigned long ir4DetectionTime = 0;
 
 // =====================================================
@@ -278,36 +228,21 @@ unsigned long ir4DetectionTime = 0;
 // =====================================================
 
 bool vehicleAtUS1 = false;
-
 unsigned long us1Time = 0;
 
 // =====================================================
 // STALLED VEHICLE
 // =====================================================
 
-bool irStallActive[4] = {
-  false,
-  false,
-  false,
-  false
-};
-
-unsigned long irStallStart[4] = {
-  0,
-  0,
-  0,
-  0
-};
-
+bool irStallActive[4] = { false, false, false, false };
+unsigned long irStallStart[4] = { 0, 0, 0, 0 };
 bool stallAlertActive = false;
-int activeStalledIR = 1; // 0=IR1, 1=IR2, 2=IR3, 3=IR4
 
 // =====================================================
 // CONGESTION
 // =====================================================
 
 unsigned long congestionStart = 0;
-
 bool congestionActive = false;
 
 // =====================================================
@@ -315,360 +250,132 @@ bool congestionActive = false;
 // =====================================================
 
 bool wetRoadActive = false;
-
 unsigned long lastWetFlash = 0;
-
 bool wetFlashState = false;
 
 // =====================================================
 // LED MAPPING
 // =====================================================
-//
-// 60 WS2812B LEDs total on road track:
-// Logical Left side:   0 to 29
-// Logical Right side: 30 to 59
-//
-// SWAP SIDES: Logical Left -> Physical Right (30..59)
-//             Logical Right -> Physical Left (0..29)
-//
-int physicalLED(
-  int logicalLED
-) {
+// Physical LEFT  = LEDs 0-29
+// Physical RIGHT = LEDs 30-59
+// Logical LEFT  -> physical RIGHT (59 - logicalLED)
+// Logical RIGHT -> physical LEFT (29 - (logicalLED - 30))
+// =====================================================
 
-  if (logicalLED < 0)
+int physicalLED(int logicalLED) {
+  if (logicalLED < 0) {
     logicalLED = 0;
-
-  if (logicalLED >= NUM_LEDS)
-    logicalLED = NUM_LEDS - 1;
-
-  // Swap Left (0..29) and Right (30..59) halves
-  if (logicalLED < 30) {
-    return logicalLED + 30;
-  } else {
-    return logicalLED - 30;
   }
+  if (logicalLED >= NUM_LEDS) {
+    logicalLED = NUM_LEDS - 1;
+  }
+
+  // LOGICAL LEFT -> PHYSICAL RIGHT
+  if (logicalLED < 30) {
+    return 59 - logicalLED;
+  }
+
+  // LOGICAL RIGHT -> PHYSICAL LEFT
+  return 29 - (logicalLED - 30);
 }
 
-// =====================================================
-// MAPPED LED
-// =====================================================
-
-void setMappedLED(
-  int logicalLED,
-  uint32_t color
-) {
-
-  leds.setPixelColor(
-    physicalLED(logicalLED),
-    color
-  );
+void setMappedLED(int logicalLED, uint32_t color) {
+  leds.setPixelColor(physicalLED(logicalLED), color);
 }
-
-// =====================================================
-// NORMAL AMBER
-// =====================================================
 
 void normalLEDs() {
-
   leds.clear();
-
-  uint32_t yellow =
-    leds.Color(
-      255,
-      180,
-      0
-    );
-
-  for (
-    int i = 0;
-    i < NUM_LEDS;
-    i++
-  ) {
-
-    setMappedLED(
-      i,
-      yellow
-    );
+  uint32_t amber = leds.Color(15, 7, 0);
+  for (int i = 0; i < NUM_LEDS; i++) {
+    setMappedLED(i, amber);
   }
-
   leds.show();
 }
-
-// =====================================================
-// COLLISION LEDs
-// =====================================================
-//
-// LOGICAL LEFT
-// Due to side switching, this now appears
-// physically on the opposite side.
-// =====================================================
 
 void collisionLEDs() {
-
   normalLEDs();
-
-  uint32_t red =
-    leds.Color(
-      255,
-      0,
-      0
-    );
-
-  for (
-    int i = 10;
-    i <= 13;
-    i++
-  ) {
-
-    setMappedLED(
-      i,
-      red
-    );
+  uint32_t red = leds.Color(255, 0, 0);
+  for (int i = 10; i <= 13; i++) {
+    setMappedLED(i, red);
   }
-
   leds.show();
 }
-
-// =====================================================
-// WRONG WAY LEDs
-// =====================================================
 
 void wrongWayLEDs() {
+  leds.clear();
+  uint32_t red = leds.Color(255, 0, 0);
 
-  static bool flashState = false;
-  static unsigned long lastFlash = 0;
-
-  if (
-    millis() -
-    lastFlash >=
-    250
-  ) {
-
-    lastFlash =
-      millis();
-
-    flashState =
-      !flashState;
+  // LOGICAL LEFT END
+  for (int i = 0; i < 4; i++) {
+    setMappedLED(i, red);
   }
 
-  leds.clear();
-
-  uint32_t red =
-    leds.Color(
-      255,
-      0,
-      0
-    );
-
-  if (
-    flashState
-  ) {
-
-    // Opposite-side warning.
-    // Logical LEFT = physical LEDs 30-59
-    // Logical RIGHT = physical LEDs 0-29
-    //
-    // Both halves flash red for the wrong-way warning.
-    // The actual side reversal is handled by physicalLED().
-    for (
-      int i = 30;
-      i <= 59;
-      i++
-    ) {
-
-      leds.setPixelColor(
-        physicalLED(i),
-        red
-      );
-    }
-
-    for (
-      int i = 0;
-      i <= 29;
-      i++
-    ) {
-
-      leds.setPixelColor(
-        physicalLED(i),
-        red
-      );
-    }
+  // LOGICAL RIGHT END
+  for (int i = 56; i < 60; i++) {
+    setMappedLED(i, red);
   }
 
   leds.show();
 }
 
-// =====================================================
-// STALLED VEHICLE LEDs (LOCALIZED AROUND STALLED IR SENSOR)
-// =====================================================
-
-// Physical LED start and end indices centered tightly around each IR sensor:
-// IR1: LEDs 2..6  (Opposing roadside: 32..36)
-// IR2: LEDs 10..14 (Opposing roadside: 40..44)
-// IR3: LEDs 17..21 (Opposing roadside: 47..51)
-// IR4: LEDs 24..28 (Opposing roadside: 54..58)
-const int irLedStart[4] = { 2, 10, 17, 24 };
-const int irLedEnd[4]   = { 6, 14, 21, 28 };
-
 void stalledLEDs() {
-  uint32_t yellow = leds.Color(255, 180, 0);
-  uint32_t red    = leds.Color(255, 0, 0);
-
   static bool flashState = false;
   flashState = !flashState;
 
-  // 1. Maintain base normal amber road lighting across the rest of the road
-  normalLEDs();
+  uint32_t red = leds.Color(255, 0, 0);
+  uint32_t amber = leds.Color(15, 7, 0);
 
-  // 2. Only illuminate and flash localized cluster immediately around the stalled IR sensor
-  int s = constrain(activeStalledIR, 0, 3);
-  int startIdx = irLedStart[s];
-  int endIdx   = irLedEnd[s];
-
-  for (int i = startIdx; i <= endIdx; i++) {
-    // Road lane where vehicle is stalled
-    setMappedLED(i, flashState ? red : yellow);
-    // Opposing roadside lane for safety warning visibility
-    setMappedLED(i + 30, flashState ? red : yellow);
-  }
-
-  leds.show();
-}
-
-// =====================================================
-// CONGESTION LEDs
-// =====================================================
-//
-// Both sides glow red/orange to indicate congestion.
-// =====================================================
-
-void congestionLEDs() {
-
-  uint32_t red =
-    leds.Color(
-      180,
-      0,
-      0
-    );
-
-  for (
-    int i = 0;
-    i < NUM_LEDS;
-    i++
-  ) {
-
-    setMappedLED(
-      i,
-      red
-    );
-  }
-
-  leds.show();
-}
-
-// =====================================================
-// WET ROAD LEDS
-// =====================================================
-//
-// ALL 60 LEDs FLASH WHITE.
-// =====================================================
-
-void wetRoadLEDs() {
-
-  uint32_t white =
-    leds.Color(
-      255,
-      255,
-      255
-    );
-
-  uint32_t off =
-    leds.Color(
-      0,
-      0,
-      0
-    );
-
-  wetFlashState =
-    !wetFlashState;
-
-  for (
-    int i = 0;
-    i < NUM_LEDS;
-    i++
-  ) {
-
-    if (wetFlashState) {
-
-      setMappedLED(
-        i,
-        white
-      );
-
+  // LOGICAL LEFT
+  for (int i = 0; i < 15; i++) {
+    if (flashState) {
+      setMappedLED(i, red);
     } else {
-
-      setMappedLED(
-        i,
-        off
-      );
+      setMappedLED(i, amber);
     }
   }
 
   leds.show();
 }
 
-// =====================================================
-// RFID EMERGENCY PATTERN
-// =====================================================
-//
-// RED sequential pattern twice.
-// =====================================================
+void congestionLEDs() {
+  uint32_t red = leds.Color(180, 0, 0);
+  for (int i = 0; i < NUM_LEDS; i++) {
+    setMappedLED(i, red);
+  }
+  leds.show();
+}
+
+void wetRoadLEDs() {
+  uint32_t white = leds.Color(255, 255, 255);
+  uint32_t off = leds.Color(0, 0, 0);
+
+  wetFlashState = !wetFlashState;
+
+  for (int i = 0; i < NUM_LEDS; i++) {
+    if (wetFlashState) {
+      setMappedLED(i, white);
+    } else {
+      setMappedLED(i, off);
+    }
+  }
+
+  leds.show();
+}
 
 void emergencyPattern() {
-
-  uint32_t red =
-    leds.Color(
-      255,
-      0,
-      0
-    );
+  uint32_t red = leds.Color(255, 0, 0);
 
   leds.clear();
   leds.show();
 
-  for (
-    int repeat = 0;
-    repeat < 2;
-    repeat++
-  ) {
-
-    for (
-      int i = 0;
-      i < NUM_LEDS;
-      i++
-    ) {
-
-      setMappedLED(
-        i,
-        red
-      );
-
+  for (int repeat = 0; repeat < 2; repeat++) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+      setMappedLED(i, red);
       leds.show();
-
       delay(35);
-
-      setMappedLED(
-        i,
-        leds.Color(
-          255,
-          70,
-          0
-        )
-      );
-
+      setMappedLED(i, leds.Color(15, 7, 0));
       leds.show();
     }
-
     delay(150);
   }
 
@@ -676,209 +383,77 @@ void emergencyPattern() {
 }
 
 // =====================================================
-// NORMAL E-INK
+// E-INK SCREENS
 // =====================================================
 
 void showNormalScreen() {
-
   eink.setFullWindow();
-
   eink.firstPage();
-
   do {
-
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
     eink.setTextSize(2);
-
-    eink.setCursor(
-      55,
-      25
-    );
-
-    eink.println(
-      "SENTRAX"
-    );
+    eink.setCursor(55, 25);
+    eink.println("SENTRAX");
 
     // BIG SPEED
     eink.setTextSize(8);
+    String speedText = String((int)permittedSpeed);
+    int width = speedText.length() * 48;
+    int x = (200 - width) / 2;
+    if (x < 0) x = 0;
 
-    String speedText =
-      String(
-        (int)permittedSpeed
-      );
-
-    int width =
-      speedText.length() * 48;
-
-    int x =
-      (200 - width) / 2;
-
-    if (x < 0) {
-      x = 0;
-    }
-
-    eink.setCursor(
-      x,
-      110
-    );
-
-    eink.println(
-      speedText
-    );
+    eink.setCursor(x, 110);
+    eink.println(speedText);
 
     eink.setTextSize(2);
-
-    eink.setCursor(
-      65,
-      140
-    );
-
-    eink.println(
-      "KM/H"
-    );
+    eink.setCursor(65, 140);
+    eink.println("KM/H");
 
     eink.setTextSize(1);
-
-    eink.setCursor(
-      55,
-      170
-    );
-
-    eink.println(
-      "ROAD CLEAR"
-    );
-
-  } while (
-    eink.nextPage()
-  );
-}
-
-// =====================================================
-// CONGESTION SCREEN
-// =====================================================
-
-void showCongestionScreen() {
-
-  eink.setFullWindow();
-
-  eink.firstPage();
-
-  do {
-
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
-
-    // LARGE WARNING TRIANGLE
-    eink.drawTriangle(
-      100,
-      35,
-      40,
-      125,
-      160,
-      125,
-      GxEPD_BLACK
-    );
-
-    eink.setTextSize(3);
-
-    eink.setCursor(
-      35,
-      160
-    );
-
-    eink.println(
-      "CONGESTION"
-    );
-
-    eink.setTextSize(2);
-
-    eink.setCursor(
-      55,
-      190
-    );
-
-    eink.print(
-      "SPEED "
-    );
-
-    eink.print(
-      (int)permittedSpeed
-    );
-
-  } while (
-    eink.nextPage()
-  );
-}
-
-// =====================================================
-// CALCULATING SPEED SCREEN
-// =====================================================
-
-void showCalculatingSpeedScreen() {
-
-  eink.setFullWindow();
-  eink.firstPage();
-
-  do {
-
-    eink.fillScreen(GxEPD_WHITE);
-    eink.setTextColor(GxEPD_BLACK);
-
-    eink.setTextSize(3);
-    eink.setCursor(15, 65);
-    eink.println("CALCULATING");
-
-    eink.setCursor(55, 115);
-    eink.println("SPEED");
-
-    eink.setTextSize(2);
-    eink.setCursor(65, 160);
-    eink.println(VEHICLE_NUMBER);
-
+    eink.setCursor(55, 170);
+    eink.println("ROAD CLEAR");
   } while (eink.nextPage());
 }
 
-// =====================================================
-// VEHICLE SPEED SCREEN
-// =====================================================
-
-void showMeasuredSpeed(
-  float speed
-) {
-
+void showCongestionScreen() {
   eink.setFullWindow();
   eink.firstPage();
-
   do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
+    // LARGE WARNING TRIANGLE
+    eink.drawTriangle(100, 35, 40, 125, 160, 125, GxEPD_BLACK);
+
+    eink.setTextSize(3);
+    eink.setCursor(35, 160);
+    eink.println("CONGESTION");
+
+    eink.setTextSize(2);
+    eink.setCursor(55, 190);
+    eink.print("SPEED ");
+    eink.print((int)permittedSpeed);
+  } while (eink.nextPage());
+}
+
+void showMeasuredSpeed(float speed) {
+  eink.setFullWindow();
+  eink.firstPage();
+  do {
     eink.fillScreen(GxEPD_WHITE);
     eink.setTextColor(GxEPD_BLACK);
 
     eink.setTextSize(2);
-    eink.setCursor(30, 25);
-    eink.print("VEHICLE ");
-    eink.println(VEHICLE_NUMBER);
+    eink.setCursor(35, 25);
+    eink.println("VEHICLE SPEED");
 
     eink.setTextSize(7);
-
-    String s = String(speed, 1);
+    String s = String((int)speed);
     int width = s.length() * 42;
     int x = (200 - width) / 2;
-
-    if (x < 0)
-      x = 0;
+    if (x < 0) x = 0;
 
     eink.setCursor(x, 110);
     eink.println(s);
@@ -892,521 +467,188 @@ void showMeasuredSpeed(
     eink.print("LIMIT ");
     eink.print((int)permittedSpeed);
     eink.print(" KM/H");
-
   } while (eink.nextPage());
 }
 
-
-// =====================================================
-// COLLISION SCREEN
-// =====================================================
-
 void showCollisionScreen() {
-
   eink.setFullWindow();
-
   eink.firstPage();
-
   do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
-
-    eink.drawLine(
-      35,
-      40,
-      165,
-      125,
-      GxEPD_BLACK
-    );
-
-    eink.drawLine(
-      165,
-      40,
-      35,
-      125,
-      GxEPD_BLACK
-    );
+    eink.drawLine(35, 40, 165, 125, GxEPD_BLACK);
+    eink.drawLine(165, 40, 35, 125, GxEPD_BLACK);
 
     eink.setTextSize(3);
-
-    eink.setCursor(
-      30,
-      165
-    );
-
-    eink.println(
-      "COLLISION"
-    );
-
-  } while (
-    eink.nextPage()
-  );
+    eink.setCursor(30, 165);
+    eink.println("COLLISION");
+  } while (eink.nextPage());
 }
-
-// =====================================================
-// WRONG WAY SCREEN
-// =====================================================
 
 void showWrongWayScreen() {
-
   eink.setFullWindow();
-
   eink.firstPage();
-
   do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
-
-    eink.drawLine(
-      100,
-      125,
-      100,
-      45,
-      GxEPD_BLACK
-    );
-
-    eink.drawLine(
-      100,
-      45,
-      65,
-      80,
-      GxEPD_BLACK
-    );
-
-    eink.drawLine(
-      100,
-      45,
-      135,
-      80,
-      GxEPD_BLACK
-    );
+    eink.drawLine(100, 125, 100, 45, GxEPD_BLACK);
+    eink.drawLine(100, 45, 65, 80, GxEPD_BLACK);
+    eink.drawLine(100, 45, 135, 80, GxEPD_BLACK);
 
     eink.setTextSize(3);
-
-    eink.setCursor(
-      25,
-      165
-    );
-
-    eink.println(
-      "WRONG WAY"
-    );
-
-  } while (
-    eink.nextPage()
-  );
+    eink.setCursor(25, 165);
+    eink.println("WRONG WAY");
+  } while (eink.nextPage());
 }
-
-// =====================================================
-// RASH DRIVING SCREEN
-// =====================================================
 
 void showRashScreen() {
-
   eink.setFullWindow();
-
   eink.firstPage();
-
   do {
-
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
     // SPEEDOMETER
-    eink.drawCircle(
-      100,
-      80,
-      42,
-      GxEPD_BLACK
-    );
-
-    eink.drawLine(
-      100,
-      80,
-      130,
-      53,
-      GxEPD_BLACK
-    );
+    eink.drawCircle(100, 80, 42, GxEPD_BLACK);
+    eink.drawLine(100, 80, 130, 53, GxEPD_BLACK);
 
     eink.setTextSize(3);
-
-    eink.setCursor(
-      15,
-      160
-    );
-
-    eink.println(
-      "OVERSPEED!"
-    );
+    eink.setCursor(15, 160);
+    eink.println("OVERSPEED!");
 
     eink.setTextSize(2);
-
-    eink.setCursor(
-      45,
-      190
-    );
-
-    eink.println(
-      "RASH DRIVING"
-    );
-
-  } while (
-    eink.nextPage()
-  );
+    eink.setCursor(45, 190);
+    eink.println("RASH DRIVING");
+  } while (eink.nextPage());
 }
-
-// =====================================================
-// WET ROAD SCREEN
-// =====================================================
 
 void showWetScreen() {
-
   eink.setFullWindow();
-
   eink.firstPage();
-
   do {
-
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
     // WATER DROPS
-    eink.fillCircle(
-      70,
-      70,
-      18,
-      GxEPD_BLACK
-    );
-
-    eink.fillCircle(
-      100,
-      90,
-      18,
-      GxEPD_BLACK
-    );
-
-    eink.fillCircle(
-      130,
-      70,
-      18,
-      GxEPD_BLACK
-    );
+    eink.fillCircle(70, 70, 18, GxEPD_BLACK);
+    eink.fillCircle(100, 90, 18, GxEPD_BLACK);
+    eink.fillCircle(130, 70, 18, GxEPD_BLACK);
 
     eink.setTextSize(3);
-
-    eink.setCursor(
-      45,
-      145
-    );
-
-    eink.println(
-      "ROAD WET"
-    );
+    eink.setCursor(45, 145);
+    eink.println("ROAD WET");
 
     eink.setTextSize(2);
-
-    eink.setCursor(
-      45,
-      180
-    );
-
-    eink.println(
-      "SPEED 40"
-    );
-
-  } while (
-    eink.nextPage()
-  );
+    eink.setCursor(45, 180);
+    eink.println("SPEED 40");
+  } while (eink.nextPage());
 }
-
-// =====================================================
-// HIGH TEMPERATURE SCREEN
-// =====================================================
 
 void showHighTempScreen() {
-
   eink.setFullWindow();
-
   eink.firstPage();
-
   do {
-
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
     eink.setTextSize(3);
+    eink.setCursor(30, 35);
+    eink.println("HIGH TEMP");
 
-    eink.setCursor(
-      30,
-      35
-    );
-
-    eink.println(
-      "HIGH TEMP"
-    );
-
-    eink.drawCircle(
-      100,
-      110,
-      22,
-      GxEPD_BLACK
-    );
-
-    eink.drawLine(
-      100,
-      50,
-      100,
-      110,
-      GxEPD_BLACK
-    );
+    eink.drawCircle(100, 110, 22, GxEPD_BLACK);
+    eink.drawLine(100, 50, 100, 110, GxEPD_BLACK);
 
     eink.setTextSize(2);
-
-    eink.setCursor(
-      65,
-      160
-    );
-
-    eink.println(
-      "SLOW"
-    );
-
-  } while (
-    eink.nextPage()
-  );
+    eink.setCursor(65, 160);
+    eink.println("SLOW");
+  } while (eink.nextPage());
 }
-
-// =====================================================
-// HIGH TEMPERATURE SCREEN
-// =====================================================
-
-
-// =====================================================
-// HUMIDITY SCREEN
-// =====================================================
 
 void showHumidityScreen() {
-
   eink.setFullWindow();
-
   eink.firstPage();
-
   do {
-
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
     eink.setTextSize(3);
+    eink.setCursor(10, 35);
+    eink.println("HUMIDITY");
 
-    eink.setCursor(
-      10,
-      35
-    );
-
-    eink.println(
-      "HUMIDITY"
-    );
-
-    eink.drawCircle(
-      100,
-      90,
-      35,
-      GxEPD_BLACK
-    );
+    eink.drawCircle(100, 90, 35, GxEPD_BLACK);
 
     eink.setTextSize(2);
-
-    eink.setCursor(
-      65,
-      160
-    );
-
-    eink.println(
-      "SLOW"
-    );
-
-  } while (
-    eink.nextPage()
-  );
+    eink.setCursor(65, 160);
+    eink.println("SLOW");
+  } while (eink.nextPage());
 }
-
-// =====================================================
-// EMERGENCY SCREEN
-// =====================================================
 
 void showEmergencyScreen() {
-
   eink.setFullWindow();
-
   eink.firstPage();
-
   do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
-
-    eink.drawLine(
-      40,
-      45,
-      160,
-      125,
-      GxEPD_BLACK
-    );
-
-    eink.drawLine(
-      160,
-      45,
-      40,
-      125,
-      GxEPD_BLACK
-    );
+    eink.drawLine(40, 45, 160, 125, GxEPD_BLACK);
+    eink.drawLine(160, 45, 40, 125, GxEPD_BLACK);
 
     eink.setTextSize(3);
-
-    eink.setCursor(
-      15,
-      165
-    );
-
-    eink.println(
-      "EMERGENCY"
-    );
-
-  } while (
-    eink.nextPage()
-  );
+    eink.setCursor(15, 165);
+    eink.println("EMERGENCY");
+  } while (eink.nextPage());
 }
 
-// =====================================================
-// STALLED VEHICLE SCREEN
-// =====================================================
-
 void showStalledScreen() {
-
   eink.setFullWindow();
-
   eink.firstPage();
-
   do {
+    eink.fillScreen(GxEPD_WHITE);
+    eink.setTextColor(GxEPD_BLACK);
 
-    eink.fillScreen(
-      GxEPD_WHITE
-    );
-
-    eink.setTextColor(
-      GxEPD_BLACK
-    );
-
-    eink.drawTriangle(
-      100,
-      40,
-      45,
-      130,
-      155,
-      130,
-      GxEPD_BLACK
-    );
+    eink.drawTriangle(100, 40, 45, 130, 155, 130, GxEPD_BLACK);
 
     eink.setTextSize(3);
-
-    eink.setCursor(
-      20,
-      165
-    );
-
-    eink.println(
-      "VEHICLE STOP"
-    );
-
-  } while (
-    eink.nextPage()
-  );
+    eink.setCursor(20, 165);
+    eink.println("VEHICLE STOP");
+  } while (eink.nextPage());
 }
 
 // =====================================================
 // DISPLAY ALERT
 // =====================================================
 
-void displayAlert(
-  AlertType alert
-) {
-
+void displayAlert(AlertType alert) {
   switch (alert) {
-
     case COLLISION:
-      notifyBLEEvent("COLLISION");
       showCollisionScreen();
       break;
-
     case WRONG_WAY:
       showWrongWayScreen();
       break;
-
     case EMERGENCY:
       showEmergencyScreen();
       break;
-
     case RASH_DRIVING:
       showRashScreen();
       break;
-
     case WET_ROAD:
       showWetScreen();
       break;
-
     case HIGH_TEMP_ALERT:
       showHighTempScreen();
       break;
-
     case HIGH_HUMIDITY_ALERT:
       showHumidityScreen();
       break;
-
     case STALLED_VEHICLE:
       showStalledScreen();
       break;
-
     case CONGESTION:
       showCongestionScreen();
       break;
-
     default:
       showNormalScreen();
       break;
@@ -1417,118 +659,352 @@ void displayAlert(
 // TRIGGER ALERT
 // =====================================================
 
-void triggerAlert(
-  AlertType alert
-) {
-
-  activeAlert =
-    alert;
-
-  alertStart =
-    millis();
+void triggerAlert(AlertType alert) {
+  activeAlert = alert;
+  alertStart = millis();
 
   switch (alert) {
-
     case COLLISION:
-      notifyBLEEvent("COLLISION");
-
       collisionLEDs();
-
-      LinkSerial.println(
-        "COLLISION"
-      );
-
+      LinkSerial.println("COLLISION");
+      notifyBLEEvent("COLLISION");
       break;
 
     case WRONG_WAY:
-
       wrongWayLEDs();
-
-      LinkSerial.println(
-        "WRONG"
-      );
-
+      LinkSerial.println("WRONG");
+      notifyBLEEvent("WRONG_WAY");
       break;
 
     case RASH_DRIVING:
-
-      LinkSerial.println(
-        "RASH"
-      );
-
+      LinkSerial.println("RASH");
+      notifyBLEEvent("RASH");
       break;
 
     case WET_ROAD:
-
-      permittedSpeed = WET_SPEED;
-
+      // White flashing handled continuously
       LinkSerial.println("WET");
-      LinkSerial.print("LIMIT:");
-      LinkSerial.println((int)permittedSpeed);
-
+      notifyBLEEvent("WET");
       break;
 
     case HIGH_TEMP_ALERT:
-
-      permittedSpeed = TEMP_SPEED;
-
       LinkSerial.println("TEMP");
-      LinkSerial.print("LIMIT:");
-      LinkSerial.println((int)permittedSpeed);
-
+      notifyBLEEvent("TEMP");
       break;
 
     case HIGH_HUMIDITY_ALERT:
-
-      LinkSerial.println(
-        "HUMIDITY"
-      );
-
+      LinkSerial.println("HUMIDITY");
+      notifyBLEEvent("HUMIDITY");
       break;
 
     case STALLED_VEHICLE:
-
-      LinkSerial.println(
-        "STALLED"
-      );
-
-      stallAlertActive =
-        true;
-
+      LinkSerial.println("STALLED");
+      notifyBLEEvent("STALLED");
+      stallAlertActive = true;
+      congestionActive = false; // Resolved conflict: Mutually exclusive
       break;
 
     case CONGESTION:
-
       LinkSerial.println("CONGESTION");
-
+      notifyBLEEvent("CONGESTION");
       congestionActive = true;
-      permittedSpeed = CONGESTION_SPEED;
-
-      LinkSerial.print("LIMIT:");
-      LinkSerial.println((int)permittedSpeed);
-
+      stallAlertActive = false; // Resolved conflict: Mutually exclusive
       congestionLEDs();
-
       break;
 
     case EMERGENCY:
-
       emergencyPattern();
-
-      LinkSerial.println(
-        "RFID"
-      );
-
+      LinkSerial.println("RFID");
+      notifyBLEEvent("EMERGENCY");
       break;
 
     default:
-
       break;
   }
 
-  displayAlert(
-    alert
-  );
+  displayAlert(alert);
+}
+
+// =====================================================
+// CONGESTION DETECTION
+// =====================================================
+// ANY TWO OR MORE IR SENSORS must remain blocked
+// continuously for CONGESTION_TIME (15 seconds).
+// =====================================================
+
+void checkCongestion() {
+  int occupied = 0;
+  int pins[4] = {
+    IR1_PIN,
+    IR2_PIN,
+    IR3_PIN,
+    IR4_PIN
+  };
+
+  for (int i = 0; i < 4; i++) {
+    if (digitalRead(pins[i]) == LOW) {
+      occupied++;
+    }
+  }
+
+  // ---------------------------------------------------
+  // TWO OR MORE VEHICLES / SENSORS ACTIVE -> CONGESTION
+  // ---------------------------------------------------
+  if (occupied >= 2) {
+    if (congestionStart == 0) {
+      congestionStart = millis();
+    }
+
+    if (millis() - congestionStart >= CONGESTION_TIME) {
+      if (!congestionActive) {
+        stallAlertActive = false;
+        congestionActive = true;
+        triggerAlert(CONGESTION);
+      }
+    }
+  } else {
+    congestionStart = 0;
+    if (congestionActive) {
+      congestionActive = false;
+      if (activeAlert == CONGESTION) {
+        activeAlert = NORMAL;
+        normalLEDs();
+        showNormalScreen();
+        LinkSerial.println("NORMAL");
+      }
+    }
+  }
+}
+
+// =====================================================
+// STALLED VEHICLE DETECTION
+// =====================================================
+// Exactly ONE vehicle blocked continuously for STALL_TIME (6s).
+// Resolves conflict: If occupied >= 2, this is CONGESTION,
+// so stalled timers are reset and stalled alert does not fire.
+// =====================================================
+
+void checkStalledVehicle() {
+  int pins[4] = {
+    IR1_PIN,
+    IR2_PIN,
+    IR3_PIN,
+    IR4_PIN
+  };
+
+  int occupied = 0;
+  for (int i = 0; i < 4; i++) {
+    if (digitalRead(pins[i]) == LOW) {
+      occupied++;
+    }
+  }
+
+  // Two or more sensors blocked = Traffic queue / Congestion.
+  // Suppress stalled vehicle alert and reset individual stall timers.
+  if (occupied >= 2) {
+    for (int i = 0; i < 4; i++) {
+      irStallActive[i] = false;
+      irStallStart[i] = 0;
+    }
+    if (stallAlertActive && !congestionActive) {
+      stallAlertActive = false;
+    }
+    return;
+  }
+
+  bool anyStalled = false;
+
+  for (int i = 0; i < 4; i++) {
+    bool blocked = (digitalRead(pins[i]) == LOW);
+
+    if (blocked) {
+      if (!irStallActive[i]) {
+        irStallActive[i] = true;
+        irStallStart[i] = millis();
+      }
+
+      if (millis() - irStallStart[i] >= STALL_TIME) {
+        anyStalled = true;
+      }
+    } else {
+      irStallActive[i] = false;
+      irStallStart[i] = 0;
+    }
+  }
+
+  if (anyStalled && !stallAlertActive && !congestionActive) {
+    triggerAlert(STALLED_VEHICLE);
+  }
+
+  // When vehicle clears (sensor becomes unblocked), restore road state
+  if (occupied == 0 && stallAlertActive) {
+    stallAlertActive = false;
+    if (activeAlert == STALLED_VEHICLE) {
+      activeAlert = NORMAL;
+      normalLEDs();
+      showNormalScreen();
+      LinkSerial.println("NORMAL");
+    }
+  }
+
+  // Flash stalled vehicle LEDs (amber/red on left lane)
+  if (stallAlertActive && !congestionActive && activeAlert != WET_ROAD) {
+    static unsigned long lastFlash = 0;
+    if (millis() - lastFlash >= 300) {
+      stalledLEDs();
+      lastFlash = millis();
+    }
+  }
+}
+
+// =====================================================
+// WRONG WAY
+// =====================================================
+// IR4 -> IR3 = WRONG
+// IR3 -> IR4 = NORMAL
+// =====================================================
+
+void checkWrongWay() {
+  bool ir3 = (digitalRead(IR3_PIN) == LOW);
+  bool ir4 = (digitalRead(IR4_PIN) == LOW);
+
+  // IR3 first = normal
+  if (ir3 && !lastIR3) {
+    if (!ir4FirstDetected) {
+      ir4FirstDetected = false;
+    }
+  }
+
+  // IR4 first
+  if (ir4 && !lastIR4) {
+    ir4FirstDetected = true;
+    ir4DetectionTime = millis();
+  }
+
+  // IR4 -> IR3
+  if (ir3 && !lastIR3 && ir4FirstDetected) {
+    unsigned long elapsed = millis() - ir4DetectionTime;
+    if (elapsed <= WRONG_WAY_WINDOW) {
+      triggerAlert(WRONG_WAY);
+    }
+    ir4FirstDetected = false;
+  }
+
+  // Timeout
+  if (ir4FirstDetected && (millis() - ir4DetectionTime > WRONG_WAY_WINDOW)) {
+    ir4FirstDetected = false;
+  }
+
+  lastIR3 = ir3;
+  lastIR4 = ir4;
+}
+
+// =====================================================
+// ULTRASONIC DISTANCE
+// =====================================================
+
+float getDistance(int trig, int echo) {
+  digitalWrite(trig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig, LOW);
+
+  unsigned long duration = pulseIn(echo, HIGH, 20000);
+  if (duration == 0) {
+    return -1;
+  }
+
+  return duration * 0.0343 / 2.0;
+}
+
+// =====================================================
+// VEHICLE SPEED
+// =====================================================
+
+void checkVehicleSpeed() {
+  float d1 = getDistance(US1_TRIG, US1_ECHO);
+
+  // US1 DETECTED
+  if (d1 > 0 && d1 < 40 && !vehicleAtUS1) {
+    vehicleAtUS1 = true;
+    us1Time = micros();
+  }
+
+  float d2 = getDistance(US2_TRIG, US2_ECHO);
+
+  // US2 DETECTED
+  if (d2 > 0 && d2 < 40 && vehicleAtUS1) {
+    unsigned long elapsed = micros() - us1Time;
+
+    if (elapsed > 1000) {
+      float seconds = elapsed / 1000000.0;
+      float speed = (SENSOR_DISTANCE / seconds) * 3.6;
+
+      measuredVehicleSpeed = speed;
+      speedDisplayStart = millis();
+
+      LinkSerial.print("SPEED:");
+      LinkSerial.println((int)speed);
+
+      if (speed > permittedSpeed + OVERSPEED_MARGIN) {
+        triggerAlert(RASH_DRIVING);
+      } else {
+        showMeasuredSpeed(speed);
+      }
+    }
+
+    vehicleAtUS1 = false;
+  }
+
+  // Safety timeout
+  if (vehicleAtUS1 && (micros() - us1Time > 10000000UL)) {
+    vehicleAtUS1 = false;
+  }
+}
+
+// =====================================================
+// SPEED LIMIT
+// =====================================================
+
+void updateSpeedLimit() {
+  if (wetRoadActive) {
+    permittedSpeed = WET_SPEED;
+    return;
+  }
+
+  if (congestionActive) {
+    permittedSpeed = CONGESTION_SPEED;
+    return;
+  }
+
+  permittedSpeed = NORMAL_SPEED;
+}
+
+// =====================================================
+// RECEIVE ESP8266
+// =====================================================
+
+void receiveESP8266() {
+  while (LinkSerial.available()) {
+    String msg = LinkSerial.readStringUntil('\n');
+    msg.trim();
+
+    if (msg == "ESP8266_READY") {
+      lastESP8266Heartbeat = millis();
+      LinkSerial.println("ESP32_READY");
+    } else if (msg == "NIGHT") {
+      lastESP8266Heartbeat = millis();
+      nightMode = true;
+    } else if (msg == "DAY") {
+      lastESP8266Heartbeat = millis();
+      nightMode = false;
+    } else if (msg == "RFID") {
+      lastESP8266Heartbeat = millis();
+      rfidEmergencyActive = true;
+      triggerAlert(EMERGENCY);
+    }
+  }
 }
 
 // =====================================================
@@ -1548,8 +1024,7 @@ void executeCommand(String cmd) {
       measuredVehicleSpeed = spd;
       speedDisplayStart = millis();
       showMeasuredSpeed(measuredVehicleSpeed);
-      // If speed exceeds limit, trigger overspeed alert
-      if (measuredVehicleSpeed > (permittedSpeed + OVERSPEED_MARGIN) || measuredVehicleSpeed > DEMO_OVERSPEED_LIMIT) {
+      if (measuredVehicleSpeed > (permittedSpeed + OVERSPEED_MARGIN)) {
         triggerAlert(RASH_DRIVING);
       }
     }
@@ -1561,12 +1036,6 @@ void executeCommand(String cmd) {
     triggerAlert(WRONG_WAY);
   }
   else if (cmd.startsWith("ALERT:STALLED")) {
-    int colonIdx = cmd.lastIndexOf(':');
-    if (colonIdx > 5) {
-      activeStalledIR = constrain(cmd.substring(colonIdx + 1).toInt(), 0, 3);
-    } else {
-      activeStalledIR = 1; // Default to IR2
-    }
     triggerAlert(STALLED_VEHICLE);
   }
   else if (cmd.startsWith("ALERT:CONGESTION")) {
@@ -1578,8 +1047,10 @@ void executeCommand(String cmd) {
   else if (cmd.startsWith("ALERT:HIGH_TEMP") || cmd.startsWith("ALERT:TEMP")) {
     triggerAlert(HIGH_TEMP_ALERT);
   }
+  else if (cmd.startsWith("ALERT:HIGH_HUMIDITY") || cmd.startsWith("ALERT:HUMIDITY")) {
+    triggerAlert(HIGH_HUMIDITY_ALERT);
+  }
   else if (cmd.startsWith("ALERT:EMERGENCY") || cmd.startsWith("ALERT:RFID")) {
-    rfidEmergencyActive = true;
     triggerAlert(EMERGENCY);
   }
   else if (cmd.startsWith("ALERT:NORMAL") || cmd.startsWith("ALERT:CLEAR") || cmd.startsWith("RESET")) {
@@ -1587,11 +1058,12 @@ void executeCommand(String cmd) {
     congestionActive = false;
     stallAlertActive = false;
     wetRoadActive = false;
-    highTemperatureActive = false;
     rfidEmergencyActive = false;
-    permittedSpeed = NORMAL_SPEED;
-    showNormalScreen();
+    updateSpeedLimit();
     normalLEDs();
+    showNormalScreen();
+    LinkSerial.println("NORMAL");
+    notifyBLEEvent("NORMAL");
   }
 }
 
@@ -1606,610 +1078,15 @@ void checkSerialCommands() {
 }
 
 // =====================================================
-// STALLED VEHICLE
-// =====================================================
-
-void checkStalledVehicle() {
-
-  int pins[4] = {
-    IR1_PIN,
-    IR2_PIN,
-    IR3_PIN,
-    IR4_PIN
-  };
-
-  bool anyStalled = false;
-  int lastStalledIdx = -1;
-
-  for (
-    int i = 0;
-    i < 4;
-    i++
-  ) {
-
-    bool blocked =
-      digitalRead(
-        pins[i]
-      ) == LOW;
-
-    if (blocked) {
-
-      if (!irStallActive[i]) {
-
-        irStallActive[i] =
-          true;
-
-        irStallStart[i] =
-          millis();
-      }
-
-      if (
-        millis() -
-        irStallStart[i] >=
-        STALL_TIME
-      ) {
-
-        anyStalled =
-          true;
-        lastStalledIdx = i;
-      }
-
-    } else {
-
-      irStallActive[i] =
-        false;
-
-      irStallStart[i] =
-        0;
-    }
-  }
-
-  if (
-    anyStalled &&
-    !stallAlertActive &&
-    !congestionActive
-  ) {
-
-    if (lastStalledIdx >= 0) {
-      activeStalledIR = lastStalledIdx;
-    }
-
-    triggerAlert(
-      STALLED_VEHICLE
-    );
-  }
-
-  if (stallAlertActive) {
-
-    static unsigned long
-      lastFlash = 0;
-
-    if (
-      millis() -
-      lastFlash >=
-      300
-    ) {
-
-      stalledLEDs();
-
-      lastFlash =
-        millis();
-    }
-  }
-}
-
-// =====================================================
-// CONGESTION DETECTION
-// =====================================================
-//
-// ANY TWO OR MORE IR SENSORS must remain blocked
-// continuously for 15 seconds.
-//
-// =====================================================
-
-void checkCongestion() {
-
-  int occupied = 0;
-
-  int pins[4] = {
-    IR1_PIN,
-    IR2_PIN,
-    IR3_PIN,
-    IR4_PIN
-  };
-
-  for (
-    int i = 0;
-    i < 4;
-    i++
-  ) {
-
-    if (
-      digitalRead(
-        pins[i]
-      ) == LOW
-    ) {
-
-      occupied++;
-    }
-  }
-
-  // ---------------------------------------------------
-  // TWO OR MORE VEHICLES / SENSORS ACTIVE
-  // ---------------------------------------------------
-
-  if (occupied >= 2) {
-
-    if (
-      congestionStart == 0
-    ) {
-
-      congestionStart =
-        millis();
-    }
-
-    if (
-      millis() -
-      congestionStart >=
-      CONGESTION_TIME
-    ) {
-
-      if (!congestionActive) {
-
-        congestionActive =
-          true;
-
-        triggerAlert(
-          CONGESTION
-        );
-      }
-    }
-
-  } else {
-
-    congestionStart =
-      0;
-
-    if (congestionActive) {
-
-      congestionActive =
-        false;
-
-      updateSpeedLimit();
-
-      LinkSerial.print("LIMIT:");
-      LinkSerial.println((int)permittedSpeed);
-    }
-  }
-}
-
-// =====================================================
-// WRONG WAY
-// =====================================================
-//
-// IR4 -> IR3 = WRONG
-// IR3 -> IR4 = NORMAL
-// =====================================================
-
-void checkWrongWay() {
-
-  bool ir3 =
-    digitalRead(
-      IR3_PIN
-    ) == LOW;
-
-  bool ir4 =
-    digitalRead(
-      IR4_PIN
-    ) == LOW;
-
-  // IR3 first = normal
-  if (
-    ir3 &&
-    !lastIR3
-  ) {
-
-    if (!ir4FirstDetected) {
-
-      ir4FirstDetected =
-        false;
-    }
-  }
-
-  // IR4 first
-  if (
-    ir4 &&
-    !lastIR4
-  ) {
-
-    ir4FirstDetected =
-      true;
-
-    ir4DetectionTime =
-      millis();
-  }
-
-  // IR4 -> IR3
-  if (
-    ir3 &&
-    !lastIR3 &&
-    ir4FirstDetected
-  ) {
-
-    unsigned long elapsed =
-      millis() -
-      ir4DetectionTime;
-
-    if (
-      elapsed <=
-      WRONG_WAY_WINDOW
-    ) {
-
-      triggerAlert(
-        WRONG_WAY
-      );
-    }
-
-    ir4FirstDetected =
-      false;
-  }
-
-  // Timeout
-  if (
-    ir4FirstDetected &&
-    millis() -
-    ir4DetectionTime >
-    WRONG_WAY_WINDOW
-  ) {
-
-    ir4FirstDetected =
-      false;
-  }
-
-  lastIR3 =
-    ir3;
-
-  lastIR4 =
-    ir4;
-}
-
-// =====================================================
-// ULTRASONIC DISTANCE
-// =====================================================
-
-float getDistance(
-  int trig,
-  int echo
-) {
-
-  digitalWrite(
-    trig,
-    LOW
-  );
-
-  delayMicroseconds(
-    2
-  );
-
-  digitalWrite(
-    trig,
-    HIGH
-  );
-
-  delayMicroseconds(
-    10
-  );
-
-  digitalWrite(
-    trig,
-    LOW
-  );
-
-  unsigned long duration =
-    pulseIn(
-      echo,
-      HIGH,
-      20000
-    );
-
-  if (
-    duration == 0
-  ) {
-
-    return -1;
-  }
-
-  return
-    duration *
-    0.0343 /
-    2.0;
-}
-
-// =====================================================
-// VEHICLE SPEED
-// =====================================================
-//
-// US1 detects vehicle
-//       ↓
-// start timer
-//       ↓
-// US2 detects vehicle
-//       ↓
-// calculate actual speed
-//       ↓
-// display speed
-//       ↓
-// if speed > permitted speed + margin
-// show OVERSPEED / RASH DRIVING
-//
-// =====================================================
-
-void checkVehicleSpeed() {
-
-  if (!speedMeasureMode)
-    return;
-
-  // No vehicle detected -> requested demo value.
-  if (
-    millis() - speedMeasureStart >=
-    SPEED_MEASURE_TIMEOUT
-  ) {
-
-    measuredVehicleSpeed = DEMO_SPEED;
-
-    showMeasuredSpeed(DEMO_SPEED);
-
-    LinkSerial.print("SPEED:");
-    LinkSerial.println(DEMO_SPEED, 1);
-
-    speedMeasureMode = false;
-    speedDisplayStart = millis();
-
-    return;
-  }
-
-  float d1 =
-    getDistance(
-      US1_TRIG,
-      US1_ECHO
-    );
-
-  bool us1Detected =
-    d1 > 0 &&
-    d1 < 40;
-
-  if (
-    us1Detected &&
-    !lastUS1Detected
-  ) {
-
-    vehicleAtUS1 = true;
-    us1Time = micros();
-  }
-
-  lastUS1Detected = us1Detected;
-
-  float d2 =
-    getDistance(
-      US2_TRIG,
-      US2_ECHO
-    );
-
-  bool us2Detected =
-    d2 > 0 &&
-    d2 < 40;
-
-  if (
-    us2Detected &&
-    !lastUS2Detected &&
-    vehicleAtUS1
-  ) {
-
-    unsigned long elapsed =
-      micros() - us1Time;
-
-    if (
-      elapsed >= 10000 &&
-      elapsed <= 10000000UL
-    ) {
-
-      float seconds =
-        elapsed / 1000000.0;
-
-      float speed =
-        (
-          SENSOR_DISTANCE /
-          seconds
-        ) * 3.6;
-
-      if (
-        speed > 0 &&
-        speed < 200
-      ) {
-
-        measuredVehicleSpeed = speed;
-        speedDisplayStart = millis();
-        speedMeasureMode = false;
-
-        LinkSerial.print("SPEED:");
-        LinkSerial.println(speed, 1);
-
-        // Mandatory SentraX Change: Compare against toy-car low-speed threshold
-        if (
-          speed >
-          DEMO_OVERSPEED_LIMIT
-        ) {
-
-          triggerAlert(RASH_DRIVING);
-
-        } else {
-
-          activeAlert = NORMAL;
-          showMeasuredSpeed(speed);
-        }
-      }
-    }
-
-    vehicleAtUS1 = false;
-  }
-
-  lastUS2Detected = us2Detected;
-
-  if (
-    vehicleAtUS1 &&
-    micros() - us1Time >
-    10000000UL
-  ) {
-
-    vehicleAtUS1 = false;
-  }
-}
-
-void checkSpeedButton() {
-
-  bool state =
-    digitalRead(
-      SPEED_BUTTON_PIN
-    );
-
-  if (
-    state == LOW &&
-    lastButtonState == HIGH
-  ) {
-
-    speedMeasureMode = true;
-    speedMeasureStart = millis();
-
-    vehicleAtUS1 = false;
-    lastUS1Detected = false;
-    lastUS2Detected = false;
-
-    measuredVehicleSpeed = DEMO_SPEED;
-    speedDisplayStart = 0;
-    activeAlert = NORMAL;
-
-    showCalculatingSpeedScreen();
-
-    LinkSerial.println("SPEED_MODE");
-
-    delay(50);
-  }
-
-  lastButtonState = state;
-}
-
-
-// =====================================================
-// SPEED LIMIT
-// =====================================================
-//
-// Priority:
-//
-// 1. Wet road = 40
-// 2. Congestion = 60
-// 3. Normal = 80
-//
-// =====================================================
-
-void updateSpeedLimit() {
-
-  if (wetRoadActive) {
-    permittedSpeed = WET_SPEED;
-    return;
-  }
-
-  if (highTemperatureActive) {
-    permittedSpeed = TEMP_SPEED;
-    return;
-  }
-
-  if (congestionActive) {
-    permittedSpeed = CONGESTION_SPEED;
-    return;
-  }
-
-  permittedSpeed = NORMAL_SPEED;
-}
-
-
-// =====================================================
-// RECEIVE ESP8266
-// =====================================================
-
-unsigned long lastESP8266Heartbeat = 0;
-
-void receiveESP8266() {
-
-  while (
-    LinkSerial.available()
-  ) {
-
-    String msg =
-      LinkSerial.readStringUntil(
-        '\n'
-      );
-
-    msg.trim();
-
-    if (msg.length() > 0) {
-      lastESP8266Heartbeat = millis();
-    }
-
-    if (
-      msg ==
-      "ESP8266_READY" ||
-      msg ==
-      "ESP8266_HEARTBEAT"
-    ) {
-
-      LinkSerial.println(
-        "ESP32_READY"
-      );
-    }
-
-    else if (
-      msg ==
-      "NIGHT"
-    ) {
-
-      nightMode =
-        true;
-    }
-
-    else if (
-      msg ==
-      "DAY"
-    ) {
-
-      nightMode =
-        false;
-    }
-
-    else if (
-      msg ==
-      "RFID"
-    ) {
-
-      rfidEmergencyActive = true;
-      triggerAlert(
-        EMERGENCY
-      );
-    }
-  }
-}
-
-// =====================================================
 // SETUP
 // =====================================================
 
 void setup() {
-  // ===================================================
-  // SERIAL & BLE INITIALIZATION
-  // ===================================================
+  // 1. SERIAL & BLE INITIALIZATION
   Serial.begin(115200);
 
   BLEDevice::init("SENTRAX-ESP32");
-  BLEDevice::setMTU(517); // Support full JSON telemetry frames without BLE truncation
+  BLEDevice::setMTU(517);
   pBLEServer = BLEDevice::createServer();
   pBLEServer->setCallbacks(new SentraXBLEServerCallbacks());
 
@@ -2237,9 +1114,9 @@ void setup() {
 
   pBLEService->start();
   BLEAdvertising *pBLEAdvertising = BLEDevice::getAdvertising();
-  
+
   BLEAdvertisementData oAdvData;
-  oAdvData.setFlags(0x06); // BR_EDR_NOT_SUPPORTED | ESP_BLE_ADV_FLAG_GEN_DISC
+  oAdvData.setFlags(0x06);
   oAdvData.setName("SENTRAX-ESP32");
   pBLEAdvertising->setAdvertisementData(oAdvData);
 
@@ -2253,11 +1130,7 @@ void setup() {
   BLEDevice::startAdvertising();
   Serial.println(F("[SENTRAX] BLE Active. Broadcast Name: SENTRAX-ESP32"));
 
-
-  // ===================================================
-  // COMMUNICATION
-  // ===================================================
-
+  // 2. HARDWARE SERIAL LINK TO ESP8266
   LinkSerial.begin(
     9600,
     SERIAL_8N1,
@@ -2265,118 +1138,38 @@ void setup() {
     LINK_TX
   );
 
-  // ===================================================
-  // IR
-  // ===================================================
+  // 3. IR SENSORS
+  pinMode(IR1_PIN, INPUT);
+  pinMode(IR2_PIN, INPUT);
+  pinMode(IR3_PIN, INPUT);
+  pinMode(IR4_PIN, INPUT);
 
-  pinMode(
-    IR1_PIN,
-    INPUT
-  );
+  // 4. SOUND / COLLISION SENSOR (ACTIVE LOW)
+  pinMode(SOUND_PIN, INPUT);
 
-  pinMode(
-    IR2_PIN,
-    INPUT
-  );
+  // 5. MOISTURE SENSOR
+  pinMode(MOISTURE_PIN, INPUT);
 
-  pinMode(
-    IR3_PIN,
-    INPUT
-  );
+  // 6. ULTRASONIC SENSORS
+  pinMode(US1_TRIG, OUTPUT);
+  pinMode(US1_ECHO, INPUT);
 
-  pinMode(
-    IR4_PIN,
-    INPUT
-  );
+  pinMode(US2_TRIG, OUTPUT);
+  pinMode(US2_ECHO, INPUT);
 
-  // ===================================================
-  // SOUND
-  // ACTIVE HIGH
-  // ===================================================
-
-  pinMode(
-    SOUND_PIN,
-    INPUT
-  );
-
-  pinMode(
-    SPEED_BUTTON_PIN,
-    INPUT_PULLUP
-  );
-
-  // ===================================================
-  // MOISTURE
-  // ===================================================
-
-  pinMode(
-    MOISTURE_PIN,
-    INPUT
-  );
-
-  // ===================================================
-  // ULTRASONIC 1
-  // ===================================================
-
-  pinMode(
-    US1_TRIG,
-    OUTPUT
-  );
-
-  pinMode(
-    US1_ECHO,
-    INPUT
-  );
-
-  // ===================================================
-  // ULTRASONIC 2
-  // ===================================================
-
-  pinMode(
-    US2_TRIG,
-    OUTPUT
-  );
-
-  pinMode(
-    US2_ECHO,
-    INPUT
-  );
-
-  // ===================================================
-  // DHT11
-  // ===================================================
-
+  // 7. DHT11
   dht.begin();
 
-  // ===================================================
-  // LED STRIP
-  // ===================================================
-
+  // 8. WS2812B LED STRIP
   leds.begin();
-
-  leds.setBrightness(
-    50
-  );
-
+  leds.setBrightness(50);
   normalLEDs();
 
-  // ===================================================
-  // E-INK SPI & INITIALIZATION
-  // ===================================================
-
-  // Explicitly initialize ESP32 VSPI pins for Waveshare E-Paper:
-  // SCK = GPIO 18, MISO = GPIO 19, MOSI = GPIO 23, SS = GPIO 16 (EINK_CS)
-  SPI.begin(18, 19, 23, EINK_CS);
-
-  pinMode(EINK_BUSY, INPUT);
-  pinMode(EINK_RST, OUTPUT);
-  pinMode(EINK_DC, OUTPUT);
-  pinMode(EINK_CS, OUTPUT);
-
-  // Initialize GxEPD2 with a reliable 20ms reset duration for Waveshare
+  // 9. E-INK
   eink.init(
     115200,
     true,
-    20,
+    2,
     false
   );
 
@@ -2384,9 +1177,7 @@ void setup() {
 
   delay(300);
 
-  LinkSerial.println(
-    "ESP32_READY"
-  );
+  LinkSerial.println("ESP32_READY");
 }
 
 // =====================================================
@@ -2394,347 +1185,135 @@ void setup() {
 // =====================================================
 
 void loop() {
-
-  // Check Serial commands from PC
+  // Check USB Serial commands
   checkSerialCommands();
 
-  // ===================================================
-  // ESP8266 COMMUNICATION
-  // ===================================================
-
+  // ESP8266 Inter-board communication
   receiveESP8266();
 
-  // ===================================================
-  // SPEED BUTTON
-  // ===================================================
-
-  checkSpeedButton();
-
-  // ===================================================
-  // CONGESTION
-  // ===================================================
-
+  // Congestion detection
   checkCongestion();
 
-  // ===================================================
-  // WRONG WAY
-  // ===================================================
-
+  // Wrong-way vehicle detection
   checkWrongWay();
 
-  // ===================================================
-  // STALLED VEHICLE
-  // ===================================================
-
+  // Stalled vehicle detection
   checkStalledVehicle();
 
-  // ===================================================
-  // COLLISION / SOUND SENSOR
-  // ACTIVE HIGH
-  // ===================================================
-
-  bool collision =
-    digitalRead(
-      SOUND_PIN
-    ) == HIGH;
-
-  if (
-    collision &&
-    !lastCollision
-  ) {
-
-    triggerAlert(
-      COLLISION
-    );
+  // Collision / Sound sensor (ACTIVE LOW)
+  bool collision = (digitalRead(SOUND_PIN) == LOW);
+  if (collision && !lastCollision) {
+    triggerAlert(COLLISION);
   }
+  lastCollision = collision;
 
-  lastCollision =
-    collision;
-
-  // ===================================================
-  // ULTRASONIC
-  // ===================================================
-
+  // Vehicle speed measurement
   checkVehicleSpeed();
 
-  // ===================================================
-  // DHT11
-  // ===================================================
+  // DHT11 temperature & humidity
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
 
-  float temperature =
-    dht.readTemperature();
-
-  float humidity =
-    dht.readHumidity();
-
-  // ===================================================
-  // TEMPERATURE
-  // ===================================================
-
-  if (
-    !isnan(
-      temperature
-    )
-  ) {
-
-    bool highTemp =
-      temperature >=
-      HIGH_TEMP;
-
-    if (
-      highTemp &&
-      !lastHighTemp
-    ) {
-
-      highTemperatureActive = true;
-      permittedSpeed = TEMP_SPEED;
-
-      triggerAlert(
-        HIGH_TEMP_ALERT
-      );
+  if (!isnan(temperature)) {
+    bool highTemp = (temperature >= HIGH_TEMP);
+    if (highTemp && !lastHighTemp) {
+      triggerAlert(HIGH_TEMP_ALERT);
     }
-
-    if (!highTemp) {
-      highTemperatureActive = false;
-    }
-
-    lastHighTemp =
-      highTemp;
+    lastHighTemp = highTemp;
   }
 
-  // ===================================================
-  // HUMIDITY
-  // ===================================================
-
-  if (
-    !isnan(
-      humidity
-    )
-  ) {
-
-    bool highHumidity =
-      humidity >=
-      HIGH_HUMIDITY;
-
-    if (
-      highHumidity &&
-      !lastHighHumidity
-    ) {
-
-      triggerAlert(
-        HIGH_HUMIDITY_ALERT
-      );
+  if (!isnan(humidity)) {
+    bool highHumidity = (humidity >= HIGH_HUMIDITY);
+    if (highHumidity && !lastHighHumidity) {
+      triggerAlert(HIGH_HUMIDITY_ALERT);
     }
-
-    lastHighHumidity =
-      highHumidity;
+    lastHighHumidity = highHumidity;
   }
 
-  // ===================================================
-  // MOISTURE / WATER SENSOR
-  // ===================================================
+  // Moisture / Water sensor
+  int moisture = analogRead(MOISTURE_PIN);
+  bool wet = (moisture < MOISTURE_THRESHOLD);
 
-  int moisture =
-    analogRead(
-      MOISTURE_PIN
-    );
-
-  bool wet =
-    moisture <
-    MOISTURE_THRESHOLD;
-
-  // ---------------------------------------------------
-  // ROAD BECOMES WET
-  // ---------------------------------------------------
-
-  if (
-    wet &&
-    !lastWet
-  ) {
-
-    wetRoadActive =
-      true;
-
-    permittedSpeed =
-      WET_SPEED;
-
-    triggerAlert(
-      WET_ROAD
-    );
+  if (wet && !lastWet) {
+    wetRoadActive = true;
+    permittedSpeed = WET_SPEED;
+    triggerAlert(WET_ROAD);
   }
-
-  // ---------------------------------------------------
-  // ROAD REMAINS WET
-  // ---------------------------------------------------
 
   if (wet) {
-
-    wetRoadActive =
-      true;
-
-    permittedSpeed =
-      WET_SPEED;
+    wetRoadActive = true;
+    permittedSpeed = WET_SPEED;
 
     // Flash ALL LEDs white
-    if (
-      millis() -
-      lastWetFlash >=
-      WET_FLASH_TIME
-    ) {
-
+    if (millis() - lastWetFlash >= WET_FLASH_TIME) {
       wetRoadLEDs();
-
-      lastWetFlash =
-        millis();
+      lastWetFlash = millis();
     }
 
-    // Keep wet-road screen active
-    if (
-      activeAlert != WET_ROAD
-    ) {
-
-      activeAlert =
-        WET_ROAD;
-
+    if (activeAlert != WET_ROAD) {
+      activeAlert = WET_ROAD;
       showWetScreen();
     }
   }
 
-  // ---------------------------------------------------
-  // ROAD BECOMES DRY
-  // ---------------------------------------------------
-
-  if (
-    !wet &&
-    lastWet
-  ) {
-
-    wetRoadActive =
-      false;
-
-    updateSpeedLimit();
-
-    activeAlert =
-      NORMAL;
-
+  if (!wet && lastWet) {
+    wetRoadActive = false;
+    activeAlert = NORMAL;
+    permittedSpeed = NORMAL_SPEED;
     normalLEDs();
-
     showNormalScreen();
-
     LinkSerial.println("NORMAL");
-    LinkSerial.print("LIMIT:");
-    LinkSerial.println((int)permittedSpeed);
   }
 
-  lastWet =
-    wet;
+  lastWet = wet;
 
-  // ===================================================
-  // UPDATE SPEED PRIORITY
-  // ===================================================
-
+  // Speed limit priority
   updateSpeedLimit();
 
-  // ===================================================
-  // CONGESTION DISPLAY
-  // ===================================================
-
-  if (
-    congestionActive &&
-    !wetRoadActive &&
-    activeAlert == CONGESTION
-  ) {
-
+  // Congestion display & LED enforcement
+  if (congestionActive && !wetRoadActive && activeAlert == CONGESTION) {
     showCongestionScreen();
-
     congestionLEDs();
   }
 
-  // ===================================================
-  // ALERT TIMEOUT
-  // ===================================================
-
+  // Alert duration timeout (Non-continuous alerts return to NORMAL after 5s)
   if (
     activeAlert != NORMAL &&
     activeAlert != WET_ROAD &&
     activeAlert != CONGESTION &&
-    millis() -
-    alertStart >=
-    ALERT_TIME
+    activeAlert != STALLED_VEHICLE &&
+    millis() - alertStart >= ALERT_TIME
   ) {
-
-    activeAlert =
-      NORMAL;
-
-    stallAlertActive =
-      false;
-
-    rfidEmergencyActive =
-      false;
-
-    updateSpeedLimit();
-
-    normalLEDs();
-
-    LinkSerial.println("NORMAL");
-    LinkSerial.print("LIMIT:");
-    LinkSerial.println((int)permittedSpeed);
-
-    showNormalScreen();
-  }
-
-  // ===================================================
-  // SPEED SCREEN TIMEOUT
-  // ===================================================
-
-  if (
-    speedDisplayStart > 0 &&
-    millis() -
-    speedDisplayStart >=
-    SPEED_DISPLAY_TIME
-  ) {
-
-    speedDisplayStart = 0;
-
-    updateSpeedLimit();
-
     activeAlert = NORMAL;
-
-    showNormalScreen();
-
+    stallAlertActive = false;
+    normalLEDs();
     LinkSerial.println("NORMAL");
-    LinkSerial.print("LIMIT:");
-    LinkSerial.println((int)permittedSpeed);
+    showNormalScreen();
   }
 
-  // ===================================================
-  // WET ROAD ALWAYS HAS PRIORITY
-  // ===================================================
+  // Speed screen timeout
+  if (
+    activeAlert == NORMAL &&
+    speedDisplayStart > 0 &&
+    millis() - speedDisplayStart >= SPEED_DISPLAY_TIME
+  ) {
+    speedDisplayStart = 0;
+    showNormalScreen();
+    LinkSerial.println("NORMAL");
+  }
 
+  // Wet road always has highest priority
   if (wetRoadActive) {
-
-    permittedSpeed =
-      WET_SPEED;
-
-    activeAlert =
-      WET_ROAD;
-
-    if (
-      millis() -
-      lastWetFlash >=
-      WET_FLASH_TIME
-    ) {
-
+    permittedSpeed = WET_SPEED;
+    activeAlert = WET_ROAD;
+    if (millis() - lastWetFlash >= WET_FLASH_TIME) {
       wetRoadLEDs();
-
-      lastWetFlash =
-        millis();
+      lastWetFlash = millis();
     }
   }
 
-  
   // ===================================================
-  // BLE & SERIAL LIVE TELEMETRY BROADCAST
+  // BLE & SERIAL LIVE TELEMETRY BROADCAST (EVERY 400MS)
   // ===================================================
   if (millis() - lastBLETelemetryTime >= 400) {
     lastBLETelemetryTime = millis();
@@ -2786,5 +1365,6 @@ void loop() {
     // Also output on USB Serial for direct COM port live cable ingestion
     Serial.println(teleJson);
   }
-delay(10);
+
+  delay(10);
 }
