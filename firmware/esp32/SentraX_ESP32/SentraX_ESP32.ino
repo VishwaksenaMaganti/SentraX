@@ -2,6 +2,7 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <BLESecurity.h>
 #include <SPI.h>
 #include <GxEPD2_BW.h>
 #include <Adafruit_GFX.h>
@@ -1156,6 +1157,13 @@ void setup() {
 
   BLEDevice::init("SENTRAX-ESP32");
   BLEDevice::setMTU(517);
+
+  // Security config: Just-Works mode prevents Windows AccessDenied GATT restrictions
+  BLESecurity *pSecurity = new BLESecurity();
+  pSecurity->setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
+  pSecurity->setCapability(ESP_IO_CAP_NONE);
+  pSecurity->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
+
   pBLEServer = BLEDevice::createServer();
   pBLEServer->setCallbacks(new SentraXBLEServerCallbacks());
 
@@ -1183,6 +1191,7 @@ void setup() {
 
   pBLEService->start();
   BLEAdvertising *pBLEAdvertising = BLEDevice::getAdvertising();
+  pBLEAdvertising->addServiceUUID(SENTRAX_SERVICE_UUID);
 
   BLEAdvertisementData oAdvData;
   oAdvData.setFlags(0x06);

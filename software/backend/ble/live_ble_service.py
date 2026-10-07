@@ -42,8 +42,10 @@ class LiveBLEManager:
         self.is_scanning = False
         self.auto_reconnect = True
         self._rx_buffer = ""
-        self._worker_task: Optional[asyncio.Task] = None
+        self._reconnect_task: Optional[asyncio.Task] = None
         self.latest_live_telemetry: Optional[CanonicalTelemetry] = None
+        self._discovered_ble_devices: Dict[str, Any] = {}
+        self.last_error: str = ""
 
     async def scan_devices(self, timeout: float = 4.0) -> list:
         """Scans for nearby Bluetooth devices advertising SentraX services or matching name."""
@@ -54,6 +56,7 @@ class LiveBLEManager:
         try:
             devices = await BleakScanner.discover(return_adv=True, timeout=timeout)
             for addr, (d, adv) in devices.items():
+                self._discovered_ble_devices[addr] = d
                 name = adv.local_name or d.name or "Unknown Device"
                 uuids = [str(u).lower() for u in (adv.service_uuids or [])]
                 is_sentrax = ("SENTRAX" in name.upper() or 
@@ -74,8 +77,14 @@ class LiveBLEManager:
     async def connect(self, address_or_name: Optional[str] = None) -> bool:
         """Connects to a specific BLE address or automatically discovers SENTRAX-ESP32."""
         if not BLEAK_AVAILABLE:
-            logger.warning("Bleak library not available on this platform.")
+            self.last_error = "Bleak library not available on this platform."
+            logger.warning(self.last_error)
             return False
+
+        # Cancel any pending auto-reconnect task
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
 
         target_address = address_or_name
 
@@ -90,12 +99,32 @@ class LiveBLEManager:
                     break
 
         if not target_address:
-            logger.warning("No SENTRAX-ESP32 peripheral found during scan.")
-            return False
+            # Check if we have previously known or paired address
+            if self.connected_device_address:
+                target_address = self.connected_device_address
+            else:
+                self.last_error = "No SENTRAX-ESP32 found in scan. Ensure ESP32 is powered on."
+                logger.warning(self.last_error)
+                return False
 
         try:
             logger.info("Connecting to BLE device: %s", target_address)
-            self.client = BleakClient(target_address, disconnected_callback=self._on_disconnected)
+            # On Windows, BleakClient(str) invokes find_device_by_address which fails if device is connected to OS.
+            # Passing BLEDevice directly connects via Windows BluetoothAddress immediately!
+            device_target = self._discovered_ble_devices.get(target_address)
+            if not device_target:
+                from bleak.backends.device import BLEDevice
+                device_target = BLEDevice(
+                    address=target_address,
+                    name=self.connected_device_name or "SENTRAX-ESP32",
+                    details=None
+                )
+
+            self.client = BleakClient(
+                device_target,
+                disconnected_callback=self._on_disconnected,
+                winrt={"use_cached_services": False}
+            )
             await self.client.connect(timeout=10.0)
 
             if self.client.is_connected:
@@ -104,19 +133,37 @@ class LiveBLEManager:
                 logger.info("Successfully connected to physical ESP32 over BLE!")
 
                 # Subscribe to Telemetry Notifications
-                await self.client.start_notify(CHAR_TELEMETRY_UUID, self._on_telemetry_packet)
+                try:
+                    await self.client.start_notify(CHAR_TELEMETRY_UUID, self._on_telemetry_packet)
+                except Exception as ne:
+                    logger.warning("Telemetry notify subscribe notice: %s", ne)
+
                 # Subscribe to Events Notifications
-                await self.client.start_notify(CHAR_EVENTS_UUID, self._on_event_packet)
+                try:
+                    await self.client.start_notify(CHAR_EVENTS_UUID, self._on_event_packet)
+                except Exception as ne:
+                    logger.warning("Events notify subscribe notice: %s", ne)
 
                 update_device_status("SENTRAX-ESP32", "CONNECTED", rssi=-60, last_event="BLE_CONNECTED")
+                self.last_error = ""
                 return True
         except Exception as e:
-            logger.error("Failed to connect to BLE device %s: %s", target_address, e)
+            err_msg = str(e)
+            if "AccessDenied" in err_msg or "3" in err_msg:
+                self.last_error = "Windows AccessDenied: Please remove SENTRAX-ESP32 from Windows Bluetooth Settings (Devices), then connect via Web Bluetooth or COM Port."
+            elif "not found" in err_msg.lower():
+                self.last_error = f"Device {target_address} not found. Ensure ESP32 power LED is on and advertising."
+            else:
+                self.last_error = f"BLE connection error: {err_msg}"
+            logger.error("Failed to connect to BLE device %s: %s", target_address, err_msg)
             self.is_connected = False
             return False
 
     async def disconnect(self):
         self.auto_reconnect = False
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
         if self.client and self.client.is_connected:
             await self.client.disconnect()
         self.is_connected = False
@@ -177,16 +224,23 @@ class LiveBLEManager:
                 hardware_standby=True
             )
             asyncio.create_task(self.on_telemetry_broadcast(standby_tele, None))
-        if self.auto_reconnect:
-            asyncio.create_task(self._reconnect_loop())
+        if self.auto_reconnect and (self._reconnect_task is None or self._reconnect_task.done()):
+            self._reconnect_task = asyncio.create_task(self._reconnect_loop())
 
     async def _reconnect_loop(self):
-        while not self.is_connected and self.auto_reconnect:
-            logger.info("Attempting auto-reconnect to BLE peripheral...")
-            await asyncio.sleep(3.0)
+        retries = 0
+        max_retries = 3
+        while not self.is_connected and self.auto_reconnect and retries < max_retries:
+            retries += 1
+            logger.info("Attempting auto-reconnect to BLE peripheral (%d/%d)...", retries, max_retries)
+            await asyncio.sleep(4.0)
+            if self.is_connected or not self.auto_reconnect:
+                break
             success = await self.connect(self.connected_device_address)
             if success:
                 break
+        if not self.is_connected:
+            logger.info("Auto-reconnect attempts finished. Awaiting manual user connection.")
 
     def _on_telemetry_packet(self, sender: int, data: bytearray):
         """Processes real-time binary or JSON telemetry payload emitted by ESP32 with streaming chunk reassembly."""

@@ -83,7 +83,9 @@ async def connect_ble(address: Optional[str] = Body(None, embed=True)):
                 "address": live_ble_instance.connected_device_address,
                 "device": live_ble_instance.connected_device_name or "SENTRAX-ESP32"
             }
-        raise HTTPException(status_code=400, detail="Failed to connect to BLE device. Ensure ESP32 is powered on and advertising.")
+        err = (live_ble_instance.last_error if getattr(live_ble_instance, "last_error", None)
+               else "Failed to connect to BLE device. Ensure ESP32 is powered on and advertising.")
+        raise HTTPException(status_code=400, detail=err)
     raise HTTPException(status_code=500, detail="BLE service unavailable")
 
 
