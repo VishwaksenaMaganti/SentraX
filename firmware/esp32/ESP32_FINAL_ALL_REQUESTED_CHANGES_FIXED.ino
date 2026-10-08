@@ -209,6 +209,12 @@ unsigned long speedMeasureStart = 0;
 bool irStallActive[4] = { false, false, false, false };
 unsigned long irStallStart[4] = { 0, 0, 0, 0 };
 bool stallAlertActive = false;
+int stalledIRIndex = 1;
+
+// Manual dashboard alert hold
+bool manualAlertActive = false;
+unsigned long manualAlertStart = 0;
+const unsigned long MANUAL_ALERT_HOLD = 10000;
 
 // Congestion
 unsigned long congestionStart = 0;
@@ -274,11 +280,30 @@ void stalledLEDs() {
   uint32_t red = leds.Color(255, 0, 0);
   uint32_t amber = leds.Color(15, 7, 0);
 
-  for (int i = 0; i < 15; i++) {
-    if (flashState) {
+  // Set all LEDs to baseline amber first
+  for (int i = 0; i < NUM_LEDS; i++) {
+    setMappedLED(i, amber);
+  }
+
+  // Determine localized window (5 LEDs) around the stalled IR sensor
+  // IR1: 2..6 (and lane 2: 32..36)
+  // IR2: 10..14 (and lane 2: 40..44)
+  // IR3: 17..21 (and lane 2: 47..51)
+  // IR4: 24..28 (and lane 2: 54..58)
+  int startL = 2, endL = 6;
+  if (stalledIRIndex == 2) {
+    startL = 10; endL = 14;
+  } else if (stalledIRIndex == 3) {
+    startL = 17; endL = 21;
+  } else if (stalledIRIndex == 4) {
+    startL = 24; endL = 28;
+  }
+
+  // Flash only the localized LEDs near the stalled vehicle
+  if (flashState) {
+    for (int i = startL; i <= endL; i++) {
       setMappedLED(i, red);
-    } else {
-      setMappedLED(i, amber);
+      setMappedLED(i + 30, red);
     }
   }
   leds.show();
@@ -802,7 +827,7 @@ void checkCongestion() {
     }
   } else {
     congestionStart = 0;
-    if (congestionActive) {
+    if (congestionActive && !manualAlertActive) {
       congestionActive = false;
       if (activeAlert == CONGESTION) {
         activeAlert = NORMAL;
@@ -860,6 +885,7 @@ void checkStalledVehicle() {
 
       if (millis() - irStallStart[i] >= STALL_TIME) {
         anyStalled = true;
+        stalledIRIndex = i + 1; // 1-indexed (IR1 = 1, IR2 = 2, IR3 = 3, IR4 = 4)
       }
     } else {
       irStallActive[i] = false;
@@ -872,7 +898,7 @@ void checkStalledVehicle() {
   }
 
   // Vehicle cleared
-  if (occupied == 0 && stallAlertActive) {
+  if (occupied == 0 && stallAlertActive && !manualAlertActive) {
     stallAlertActive = false;
     if (activeAlert == STALLED_VEHICLE) {
       activeAlert = NORMAL;
@@ -1099,30 +1125,53 @@ void executeCommand(String cmd) {
     }
   }
   else if (cmd.startsWith("ALERT:COLLISION")) {
+    manualAlertActive = true;
+    manualAlertStart = millis();
     triggerAlert(COLLISION);
   }
   else if (cmd.startsWith("ALERT:WRONG_WAY")) {
+    manualAlertActive = true;
+    manualAlertStart = millis();
     triggerAlert(WRONG_WAY);
   }
   else if (cmd.startsWith("ALERT:STALLED")) {
+    manualAlertActive = true;
+    manualAlertStart = millis();
+    int idx = 1;
+    if (cmd.length() > 14 && cmd.charAt(13) == ':') {
+      idx = cmd.substring(14).toInt();
+      if (idx < 1 || idx > 4) idx = 1;
+    }
+    stalledIRIndex = idx;
     triggerAlert(STALLED_VEHICLE);
   }
   else if (cmd.startsWith("ALERT:CONGESTION")) {
+    manualAlertActive = true;
+    manualAlertStart = millis();
     triggerAlert(CONGESTION);
   }
   else if (cmd.startsWith("ALERT:WET_ROAD") || cmd.startsWith("ALERT:WET")) {
+    manualAlertActive = true;
+    manualAlertStart = millis();
     triggerAlert(WET_ROAD);
   }
   else if (cmd.startsWith("ALERT:HIGH_TEMP") || cmd.startsWith("ALERT:TEMP")) {
+    manualAlertActive = true;
+    manualAlertStart = millis();
     triggerAlert(HIGH_TEMP_ALERT);
   }
   else if (cmd.startsWith("ALERT:HIGH_HUMIDITY") || cmd.startsWith("ALERT:HUMIDITY")) {
+    manualAlertActive = true;
+    manualAlertStart = millis();
     triggerAlert(HIGH_HUMIDITY_ALERT);
   }
   else if (cmd.startsWith("ALERT:EMERGENCY") || cmd.startsWith("ALERT:RFID")) {
+    manualAlertActive = true;
+    manualAlertStart = millis();
     triggerAlert(EMERGENCY);
   }
   else if (cmd.startsWith("ALERT:NORMAL") || cmd.startsWith("ALERT:CLEAR") || cmd.startsWith("RESET")) {
+    manualAlertActive = false;
     activeAlert = NORMAL;
     alertPhase = 0;
     congestionActive = false;
@@ -1333,7 +1382,7 @@ void loop() {
     }
   }
 
-  if (!wet && lastWet) {
+  if (!wet && lastWet && !manualAlertActive) {
     wetRoadActive = false;
     activeAlert = NORMAL;
     alertPhase = 0;
@@ -1373,8 +1422,27 @@ void loop() {
     showSpeedSign(permittedSpeed, reason);
   }
 
-  // Alert duration timeout (Returns to normal 80 km/h speed sign)
+  // Manual dashboard alert timeout (holds manual alert for 10 seconds unless cleared)
+  if (manualAlertActive && (millis() - manualAlertStart >= MANUAL_ALERT_HOLD)) {
+    manualAlertActive = false;
+    if (activeAlert != NORMAL) {
+      activeAlert = NORMAL;
+      alertPhase = 0;
+      stallAlertActive = false;
+      congestionActive = false;
+      wetRoadActive = false;
+      rfidEmergencyActive = false;
+      updateSpeedLimit();
+      normalLEDs();
+      LinkSerial.println("NORMAL");
+      showNormalScreen();
+      notifyBLEEvent("NORMAL");
+    }
+  }
+
+  // Alert duration timeout for physical transient alerts (Returns to normal 80 km/h speed sign)
   if (
+    !manualAlertActive &&
     activeAlert != NORMAL &&
     activeAlert != WET_ROAD &&
     activeAlert != CONGESTION &&
