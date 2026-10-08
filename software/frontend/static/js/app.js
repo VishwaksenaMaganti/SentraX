@@ -14,12 +14,10 @@ const CHAR_COMMANDS_UUID   = '73656e74-7261-7800-0002-000000000004';
 
 // State Store
 const state = {
-    theme: 'dark',
     activeTab: 'command-center',
     telemetry: {},
     events: [],
     history: [],
-    hazards: [],
     devices: [],
     map: null,
     routeLayer: null,
@@ -41,7 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initCharts();
     initMap();
     fetchInitialData();
-    setupThemeToggle();
     initHardwareModals();
     initAerialControls();
     pollHardwareStatus();
@@ -92,6 +89,8 @@ function resetDashboardToStandby(reasonMessage) {
     setText('tel-night', 'STANDBY');
     setText('tel-us1', 'STANDBY');
     setText('tel-us2', 'STANDBY');
+    setText('tel-speed', 'STANDBY');
+    speedReading.last = null;
 
     // Reset IR pills to neutral STANDBY
     for (let i = 1; i <= 4; i++) {
@@ -247,8 +246,7 @@ function updateTelemetryUI(t) {
             }
         }
 
-        setText('tel-us1', t.ultrasonic_state?.us1_active ? 'INTERRUPTED' : 'CLEAR');
-        setText('tel-us2', t.ultrasonic_state?.us2_active ? 'INTERRUPTED' : 'CLEAR');
+        updateSpeedReading(t);
 
         updateChartsStream(t);
         updateAerialTwinUI(t);
@@ -261,6 +259,27 @@ function updateTelemetryUI(t) {
         resetDashboardToStandby(reason);
         updateNavigationScreenTelemetry(t);
     }
+}
+
+// The ESP32 sends a speed only after a vehicle crosses US1 then US2, and its telemetry has no
+// beam states. A new speed value therefore marks a fresh measurement: the gate shows both beams
+// as crossed and highlights the reading for SPEED_HOLD_MS so it can be read during a demo.
+const SPEED_HOLD_MS = 1500;
+const speedReading = { last: null, at: 0 };
+
+function updateSpeedReading(t) {
+    const speed = Number(t.measured_speed_kmh || 0);
+    const now = Date.now();
+    if (speedReading.last !== null && speed > 0 && speed !== speedReading.last) {
+        speedReading.at = now;
+    }
+    speedReading.last = speed;
+    const fresh = now - speedReading.at < SPEED_HOLD_MS;
+
+    setText('tel-us1', (t.ultrasonic_state?.us1_active || fresh) ? 'INTERRUPTED' : 'CLEAR');
+    setText('tel-us2', (t.ultrasonic_state?.us2_active || fresh) ? 'INTERRUPTED' : 'CLEAR');
+    setText('tel-speed', speed > 0 ? `${speed.toFixed(1)} km/h` : 'NO READING');
+    document.getElementById('tel-speed')?.classList.toggle('is-fresh', fresh);
 }
 
 // Updates Top Header & Modal Status Badges
@@ -295,10 +314,10 @@ function updateHardwarePills() {
     if (masterBadge && masterLabel) {
         if (state.esp32Connected) {
             masterBadge.className = 'master-gate-badge armed';
-            masterLabel.textContent = '⚡ SYSTEM ARMED (LIVE)';
+            masterLabel.textContent = 'System armed';
         } else {
             masterBadge.className = 'master-gate-badge standby';
-            masterLabel.textContent = '⚠️ STANDBY (CONNECT ESP32)';
+            masterLabel.textContent = 'Standby';
         }
     }
 }
@@ -368,17 +387,18 @@ function prependEventTimeline(evt) {
     const timeline = document.getElementById('timeline-container');
     if (!timeline) return;
 
+    const esc = window.SentraxUI ? window.SentraxUI.escapeHtml : (v) => v;
     const timeStr = new Date(evt.timestamp * 1000).toLocaleTimeString();
     const item = document.createElement('div');
     item.className = `timeline-item ${evt.severity}`;
     item.innerHTML = `
         <div>
-            <div class="timeline-title">${evt.title}</div>
-            <div style="font-size:11px; color:var(--text-muted);">${evt.description}</div>
+            <div class="timeline-title">${esc(evt.title)}</div>
+            <div class="timeline-desc">${esc(evt.description)}</div>
         </div>
-        <div style="text-align:right;">
+        <div class="timeline-meta">
             <div class="timeline-time">${timeStr}</div>
-            <span style="font-size:10px; font-weight:700;">${evt.source}</span>
+            <span>${esc(evt.source)}</span>
         </div>
     `;
 
@@ -399,14 +419,14 @@ function initCharts() {
                 datasets: [{
                     label: 'Measured Speed (km/h)',
                     data: Array(15).fill(0),
-                    borderColor: '#38bdf8',
-                    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                    borderColor: '#8EA2E8',
+                    backgroundColor: 'rgba(142, 162, 232, 0.10)',
                     fill: true,
                     tension: 0.3
                 }, {
                     label: 'Recommended Speed (km/h)',
                     data: Array(15).fill(0),
-                    borderColor: '#10b981',
+                    borderColor: '#3FB68B',
                     borderDash: [5, 5],
                     fill: false
                 }]
@@ -430,8 +450,8 @@ function initCharts() {
                 datasets: [{
                     label: 'Road Risk Score (0-100)',
                     data: Array(15).fill(0),
-                    borderColor: '#f43f5e',
-                    backgroundColor: 'rgba(244, 63, 94, 0.15)',
+                    borderColor: '#E5342B',
+                    backgroundColor: 'rgba(229, 52, 43, 0.12)',
                     fill: true,
                     tension: 0.3
                 }]
@@ -1088,10 +1108,9 @@ function updateNavigationScreenTelemetry(t) {
 // Initial Data Fetch
 async function fetchInitialData() {
     try {
-        const [devicesRes, eventsRes, hazardsRes] = await Promise.all([
+        const [devicesRes, eventsRes] = await Promise.all([
             fetch('/api/devices'),
-            fetch('/api/events?limit=20'),
-            fetch('/api/hazards')
+            fetch('/api/events?limit=20')
         ]);
 
         const devices = await devicesRes.json();
@@ -1099,9 +1118,6 @@ async function fetchInitialData() {
 
         const events = await eventsRes.json();
         events.forEach(prependEventTimeline);
-
-        const hazards = await hazardsRes.json();
-        renderHazardsUI(hazards);
     } catch (err) {
         console.error('Initial data fetch error:', err);
     }
@@ -1111,37 +1127,29 @@ function renderDevicesUI(devices) {
     const container = document.getElementById('device-cards-container');
     if (!container) return;
 
-    container.innerHTML = devices.map(d => `
-        <div class="card" style="margin-bottom:12px;">
-            <div class="card-header">
-                <span class="card-title">${d.display_name}</span>
-                <span class="live-badge ${d.connection_state === 'CONNECTED' ? 'live' : 'simulated'}">
-                    ${d.connection_state}
-                </span>
+    const esc = window.SentraxUI ? window.SentraxUI.escapeHtml : (v) => v;
+    container.innerHTML = devices.map(d => {
+        const live = d.connection_state === 'CONNECTED';
+        return `
+        <div class="card device-card">
+            <div class="card-head">
+                <div class="device-id">
+                    <span class="sensor-icon"><i class="ph ph-cpu"></i></span>
+                    <div>
+                        <div class="card-title">${esc(d.display_name)}</div>
+                        <div class="card-sub mono">${esc(d.device_id)}</div>
+                    </div>
+                </div>
+                <span class="live-badge ${live ? 'live' : 'simulated'}">${esc(d.connection_state)}</span>
             </div>
-            <div style="font-size:12px; color:var(--text-muted); display:flex; gap:20px; margin-top:8px; flex-wrap:wrap;">
-                <div>PORT/ADDR: <b>${d.port_or_address || 'BLE / COM'}</b></div>
-                <div>RSSI: <b>${d.rssi || -60} dBm</b></div>
-                <div>FIRMWARE: <b>${d.firmware_version}</b></div>
-                <div>LAST EVENT: <b>${d.last_event || 'NORMAL'}</b></div>
-            </div>
-        </div>
-    `).join('');
-}
-
-function renderHazardsUI(hazards) {
-    const list = document.getElementById('hazards-table-body');
-    if (!list) return;
-
-    list.innerHTML = hazards.map(h => `
-        <tr>
-            <td><b>${h.title}</b></td>
-            <td><span class="live-badge simulated">${h.type}</span></td>
-            <td>${h.radius_meters}m</td>
-            <td><span style="color:var(--status-critical); font-weight:700;">${h.severity}</span></td>
-            <td>${new Date(h.created_at * 1000).toLocaleTimeString()}</td>
-        </tr>
-    `).join('');
+            <dl class="device-meta">
+                <div><dt>Port / address</dt><dd>${esc(d.port_or_address || 'BLE / COM')}</dd></div>
+                <div><dt>RSSI</dt><dd>${esc(d.rssi || -60)} dBm</dd></div>
+                <div><dt>Firmware</dt><dd>${esc(d.firmware_version)}</dd></div>
+                <div><dt>Last event</dt><dd>${esc(d.last_event || 'NORMAL')}</dd></div>
+            </dl>
+        </div>`;
+    }).join('');
 }
 
 // =====================================================================
@@ -1216,7 +1224,7 @@ async function scanPCBluetoothDevices() {
 
     if (scanBtn) {
         scanBtn.disabled = true;
-        scanBtn.textContent = 'Scanning...';
+        scanBtn.textContent = 'Scanning';
     }
     if (statusEl) {
         statusEl.textContent = 'Scanning Windows Bluetooth adapter for nearby BLE devices (3.5s)...';
@@ -1275,7 +1283,7 @@ async function scanPCBluetoothDevices() {
     } finally {
         if (scanBtn) {
             scanBtn.disabled = false;
-            scanBtn.textContent = '↻ Scan BLE';
+            scanBtn.textContent = 'Scan';
         }
     }
 }
@@ -1523,14 +1531,12 @@ function handleWebBluetoothTelemetryPacket(event) {
             esp8266_connected: false,
             both_modules_connected: true,
             hardware_standby: false,
-            measured_speed_kmh: parseFloat(parsed.spd || parsed.speed || 0.0),
             recommended_speed_kmh: parseFloat(parsed.rec_speed || 80.0),
             temperature_c: parseFloat(parsed.temp || 26.5),
             humidity_pct: parseFloat(parsed.hum || 55.0),
             moisture_raw: parseInt(parsed.moist || 3100),
             ir_sensors: (parsed.ir || [0,0,0,0]).map(x => Boolean(x)),
             sound_active: Boolean(parsed.sound || 0),
-            rfid_active: Boolean(parsed.rfid || 0),
             night_mode: Boolean(parsed.night || 0),
             road_condition: (parsed.alert === 'WET_ROAD' || (parsed.moist && parsed.moist < 2000)) ? 'WET' : 'DRY',
             traffic_level: (parsed.alert === 'CONGESTION' || (parsed.ir && parsed.ir.reduce((a,b)=>a+b,0) >= 2)) ? 'CONGESTED' : 'LIGHT'
@@ -1545,6 +1551,20 @@ function handleWebBluetoothEventPacket(event) {
         const rawBytes = event.target.value;
         const decoder = new TextDecoder('utf-8');
         const alertName = decoder.decode(rawBytes).trim();
+
+        if (alertName === 'EMERGENCY') {
+            fetch('/api/events', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source: 'ESP32',
+                    type: 'EMERGENCY',
+                    severity: 'CRITICAL',
+                    title: 'Hardware Event: EMERGENCY',
+                    description: 'RFID emergency notification received over Web Bluetooth'
+                })
+            }).catch(() => {});
+        }
 
         prependEventTimeline({
             type: alertName,
@@ -1576,7 +1596,7 @@ async function refreshCOMPorts(selectId) {
         }
 
         selectEl.innerHTML = ports.map(p => `
-            <option value="${p.port}">${p.port} — ${p.description}</option>
+            <option value="${p.port}">${p.port} - ${p.description}</option>
         `).join('');
     } catch (err) {
         console.error('Error refreshing COM ports:', err);
@@ -1649,16 +1669,6 @@ async function disconnectESP32Serial() {
     }
 }
 
-function setupThemeToggle() {
-    const themeBtn = document.getElementById('btn-toggle-theme');
-    if (themeBtn) {
-        themeBtn.addEventListener('click', () => {
-            state.theme = state.theme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', state.theme);
-        });
-    }
-}
-
 // =====================================================================
 // AERIAL DIGITAL TWIN & HARDWARE COMMAND CONTROLS
 // =====================================================================
@@ -1696,7 +1706,7 @@ function initAerialControls() {
             applyBtn.disabled = true;
             try {
                 if (feedbackBanner) {
-                    feedbackBanner.textContent = `Transmitting speed override ${speed.toFixed(1)} km/h...`;
+                    feedbackBanner.textContent = `Sending test vehicle speed ${speed.toFixed(1)} km/h...`;
                     feedbackBanner.className = 'ctrl-feedback-banner';
                 }
 
@@ -1712,7 +1722,7 @@ function initAerialControls() {
 
                 if (res.ok) {
                     if (feedbackBanner) {
-                        feedbackBanner.textContent = `✓ Speed limit override set to ${speed.toFixed(1)} km/h on ESP32 & E-Ink!`;
+                        feedbackBanner.textContent = `Test vehicle speed ${speed.toFixed(1)} km/h sent to the ESP32.`;
                         feedbackBanner.className = 'ctrl-feedback-banner success';
                     }
                 } else {
@@ -1768,7 +1778,7 @@ function initAerialControls() {
                 if (res.ok) {
                     const data = await res.json();
                     if (feedbackBanner) {
-                        feedbackBanner.textContent = `✓ Alert '${alertType}' armed! LEDs & E-Ink updated (Risk: ${data.risk_score || 0})`;
+                        feedbackBanner.textContent = `Alert '${alertType}' armed. LEDs and E-Ink updated (risk ${data.risk_score || 0}).`;
                         feedbackBanner.className = 'ctrl-feedback-banner success';
                     }
                 } else {
@@ -1786,6 +1796,47 @@ function initAerialControls() {
             }
         });
     });
+
+    // 3. Reset Demo: clears every alert and test speed applied from this console
+    const resetBtn = document.getElementById('btn-reset-demo');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', async () => {
+            resetBtn.disabled = true;
+            try {
+                if (feedbackBanner) {
+                    feedbackBanner.textContent = 'Resetting demo modes on the ESP32, LEDs and E-Ink...';
+                    feedbackBanner.className = 'ctrl-feedback-banner';
+                }
+
+                // A. Direct Web Bluetooth GATT Command
+                sendHardwareCommand('ALERT:NORMAL');
+
+                // B. Backend: same ALERT:NORMAL to the board, plus clears emergency and test speed
+                const res = await fetch('/api/demo/reset', { method: 'POST' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                if (slider) slider.value = 80;
+                if (sliderVal) sliderVal.textContent = '80';
+                presets.forEach(p => p.classList.toggle('active', p.getAttribute('data-speed') === '80'));
+                alertBtns.forEach(b => b.classList.remove('active-trigger'));
+                const selectStalled = document.getElementById('select-stalled-ir');
+                if (selectStalled) selectStalled.value = '1';
+
+                if (feedbackBanner) {
+                    feedbackBanner.textContent = 'Demo reset. Alerts cleared, test speed removed, LEDs and E-Ink back to normal.';
+                    feedbackBanner.className = 'ctrl-feedback-banner success';
+                }
+            } catch (err) {
+                console.error('Demo reset error:', err);
+                if (feedbackBanner) {
+                    feedbackBanner.textContent = `Reset error: ${err.message}`;
+                    feedbackBanner.className = 'ctrl-feedback-banner error';
+                }
+            } finally {
+                resetBtn.disabled = false;
+            }
+        });
+    }
 }
 
 async function sendHardwareCommand(cmdString) {
@@ -1819,50 +1870,50 @@ function updateAerialTwinUI(t) {
     let alertName = 'ROAD CLEAR';
     let alertSeverity = 'NORMAL';
     let ledPattern = 'NORMAL (AMBER)';
-    let einkIcon = '✓';
+    let einkIcon = 'check-circle';
     let einkSub = `NORMAL LIMIT: ${speedLimit} KM/H`;
 
     if (t.collision || t.sound_active) {
         alertName = 'ACCIDENT AHEAD';
         alertSeverity = 'CRITICAL';
         ledPattern = 'COLLISION (RED FLASH 10..13)';
-        einkIcon = '⚠️';
+        einkIcon = 'warning';
         einkSub = 'SLOW DOWN / ACCIDENT';
     } else if (t.wrong_way) {
         alertName = 'WRONG WAY VEHICLE';
         alertSeverity = 'CRITICAL';
         ledPattern = 'WRONG WAY (DUAL RED FLASH)';
-        einkIcon = '⛔';
+        einkIcon = 'prohibit';
         einkSub = 'STOP & TURN AROUND';
     } else if (t.stalled_vehicle) {
         alertName = 'STALLED VEHICLE';
         alertSeverity = 'WARNING';
         ledPattern = 'LOCALIZED STALL FLASH';
-        einkIcon = '🛑';
+        einkIcon = 'traffic-cone';
         einkSub = 'LANE OBSTRUCTION';
     } else if (t.rfid_active || t.emergency_vehicle) {
         alertName = 'EMERGENCY VEHICLE';
         alertSeverity = 'HIGH';
         ledPattern = 'EMERGENCY CADENCE';
-        einkIcon = '🚨';
+        einkIcon = 'siren';
         einkSub = 'YIELD RIGHT OF WAY';
     } else if (t.traffic_level === 'CONGESTED') {
         alertName = 'CONGESTION';
         alertSeverity = 'WARNING';
         ledPattern = 'CONGESTION (HIGH DENSITY)';
-        einkIcon = '🚗';
+        einkIcon = 'car-profile';
         einkSub = 'SPEED REDUCED: 60 KM/H';
     } else if (t.road_condition === 'WET') {
         alertName = 'WET ROAD SURFACE';
         alertSeverity = 'WARNING';
         ledPattern = 'WET ROAD (SAFETY PULSE)';
-        einkIcon = '🌧️';
+        einkIcon = 'cloud-rain';
         einkSub = 'SPEED LIMIT: 40 KM/H';
     } else if (t.temperature_c >= 30.0) {
         alertName = 'HIGH ROAD TEMP';
         alertSeverity = 'CAUTION';
         ledPattern = 'HIGH TEMP (OVERHEAT)';
-        einkIcon = '☀️';
+        einkIcon = 'sun';
         einkSub = 'SPEED LIMIT: 35 KM/H';
     }
 
@@ -2003,7 +2054,7 @@ function renderEInkTwin(speedVal, alertMain, alertIcon, alertSub, measuredSpd, s
     state.lastEinkKey = key;
 
     if (einkSpeedVal) einkSpeedVal.textContent = speedVal;
-    if (einkAlertIcon) einkAlertIcon.textContent = alertIcon;
+    if (einkAlertIcon) einkAlertIcon.innerHTML = `<i class="ph-bold ph-${alertIcon}"></i>`;
     if (einkAlertMain) einkAlertMain.textContent = alertMain;
     if (einkAlertSub) einkAlertSub.textContent = alertSub;
     if (einkMeasuredSpd) einkMeasuredSpd.textContent = measuredSpd;
@@ -2021,6 +2072,6 @@ function resetAerialTwinToStandby() {
         el.className = 'aerial-hotspot standby';
     });
 
-    renderEInkTwin('--', 'STANDBY', '⏳', 'CONNECT ESP32 HARDWARE', '0.0', 'OFFLINE');
+    renderEInkTwin('--', 'STANDBY', 'hourglass', 'CONNECT ESP32 HARDWARE', '0.0', 'OFFLINE');
 }
 

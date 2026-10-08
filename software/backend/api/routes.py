@@ -24,6 +24,8 @@ from software.backend.database.models import (
 from software.backend.engines.risk_engine import RoadRiskEngine
 from software.backend.engines.recommendation_engine import RecommendationEngine
 from software.backend.engines.road_health_engine import RoadHealthEngine
+from software.backend.engines.emergency_tracker import emergency_tracker
+from software.backend.engines.speed_tracker import speed_tracker
 from software.backend.maps.route_service import RouteHealthService
 
 router = APIRouter()
@@ -292,7 +294,8 @@ async def override_speed(speed: float = Body(..., embed=True)):
         live_serial_instance.send_command(cmd)
 
     t = simulator_instance.telemetry if simulator_instance else CanonicalTelemetry()
-    t.measured_speed_kmh = float(speed)
+    speed_tracker.record(float(speed))
+    speed_tracker.apply(t)
     t.timestamp = time.time()
     t.esp32_connected = True
     t.both_modules_connected = True
@@ -378,10 +381,10 @@ async def trigger_manual_alert(
         t.temperature_c = 38.5
         evt_type = EventType.HIGH_TEMP
     elif alert_upper in ("EMERGENCY", "RFID"):
-        t.emergency_vehicle = True
-        t.rfid_active = True
+        emergency_tracker.trigger()
         evt_type = EventType.EMERGENCY
     elif alert_upper in ("NORMAL", "CLEAR"):
+        emergency_tracker.clear()
         t.road_condition = RoadCondition.DRY
         t.traffic_level = TrafficLevel.LIGHT
         t.moisture_raw = 3100
@@ -389,6 +392,8 @@ async def trigger_manual_alert(
         t.ir_sensors = [False, False, False, False]
         evt_type = EventType.NORMAL
 
+    emergency_tracker.apply(t)
+    speed_tracker.apply(t)
     score, reasons = RoadRiskEngine.calculate_risk(t)
     t.risk_score = score
     t.risk_reasons = reasons
@@ -413,6 +418,15 @@ async def trigger_manual_alert(
             await simulator_instance.broadcast_callback(t, canon_evt)
 
     return {"status": "alert_triggered", "alert": alert_upper, "risk_score": t.risk_score, "recommended": t.recommended_speed_kmh}
+
+
+@router.post("/demo/reset")
+async def reset_demo():
+    """Resets every demo mode applied from the Aerial Digital Twin console: clears manual alerts on
+    the ESP32 (LEDs and E-Ink back to normal), the emergency window and the test vehicle speed."""
+    speed_tracker.clear()
+    result = await trigger_manual_alert(alert="NORMAL", sensor_index=None)
+    return {"status": "demo_reset", "risk_score": result["risk_score"], "recommended": result["recommended"]}
 
 
 # =====================================================================
@@ -517,6 +531,12 @@ async def ingest_live_telemetry(payload: Dict[str, Any] = Body(...)):
         hardware_standby=False
     )
 
+    # The firmware's rfid flag stays latched after a scan; read it as an edge, not a level
+    emergency_tracker.observe_packet(rfid_val, alert_str, now)
+    emergency_tracker.apply(tele)
+    speed_tracker.observe_packet(speed_val, now)
+    speed_tracker.apply(tele)
+
     score, reasons = RoadRiskEngine.calculate_risk(tele)
     tele.risk_score = score
     tele.risk_reasons = reasons
@@ -549,6 +569,9 @@ def list_events(
 
 @router.post("/events")
 def create_event(event: CanonicalEvent):
+    # An emergency event relayed by the browser's Web Bluetooth link starts the emergency window
+    if event.type == EventType.EMERGENCY:
+        emergency_tracker.trigger()
     eid = save_event(event)
     return {"status": "recorded", "event_id": eid}
 

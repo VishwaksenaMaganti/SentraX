@@ -18,6 +18,7 @@ from software.backend.core.config import settings
 from software.backend.core.logging import setup_logging
 from software.backend.database.connection import init_db
 from software.backend.api.routes import router as api_router, set_services
+from software.backend.ai.routes import router as ai_router
 from software.backend.api.websocket import ws_hub
 from software.backend.simulation.simulator import SentraXSimulator
 from software.backend.cv.cv_pipeline import CVPipeline
@@ -25,6 +26,8 @@ from software.backend.ble.bleak_transport import SentraXBLEGateway
 from software.backend.ble.live_ble_service import LiveBLEManager
 from software.backend.serial_comm.live_serial_service import LiveSerialManager
 from software.backend.engines.data_fusion import DataFusionEngine
+from software.backend.engines.emergency_tracker import emergency_tracker
+from software.backend.engines.speed_tracker import speed_tracker
 
 setup_logging()
 
@@ -79,12 +82,14 @@ async def background_perception_loop():
             esp8266_conn = False
 
             now = time.time()
+            # Keep the last reading through the ESP32's blocking alert sequences (~9 s silence)
+            stall_tolerance = settings.TELEMETRY_STALL_TOLERANCE_SECONDS
             if live_ble and live_ble.is_connected:
                 esp32_conn = True
             elif live_serial and live_serial.is_esp32_connected:
                 esp32_conn = True
             elif hasattr(simulator, "_latest_live_telemetry") and simulator._latest_live_telemetry:
-                if (now - simulator._latest_live_telemetry.timestamp) < 2.0:
+                if (now - simulator._latest_live_telemetry.timestamp) < stall_tolerance:
                     esp32_conn = True
 
             if live_serial and live_serial.is_esp8266_connected:
@@ -99,13 +104,13 @@ async def background_perception_loop():
                 # ESP32 CONNECTED: Ingest fresh live sensor telemetry
                 live_tele = None
                 if live_ble and live_ble.is_connected and live_ble.latest_live_telemetry:
-                    if (now - live_ble.latest_live_telemetry.timestamp < 2.0):
+                    if (now - live_ble.latest_live_telemetry.timestamp < stall_tolerance):
                         live_tele = live_ble.latest_live_telemetry
                 elif live_serial and live_serial.is_esp32_connected and live_serial.latest_live_telemetry:
-                    if (now - live_serial.latest_live_telemetry.timestamp < 2.0):
+                    if (now - live_serial.latest_live_telemetry.timestamp < stall_tolerance):
                         live_tele = live_serial.latest_live_telemetry
                 elif hasattr(simulator, "_latest_live_telemetry") and simulator._latest_live_telemetry:
-                    if (now - simulator._latest_live_telemetry.timestamp < 2.0):
+                    if (now - simulator._latest_live_telemetry.timestamp < stall_tolerance):
                         live_tele = simulator._latest_live_telemetry
 
                 if live_tele:
@@ -114,8 +119,14 @@ async def background_perception_loop():
                     live_tele.both_modules_connected = True
                     live_tele.hardware_standby = False
                     live_tele.is_simulated = False
+                    # Emergency and speed readings can start or expire while the ESP32 is silent
+                    emergency_tracker.apply(live_tele)
+                    speed_tracker.apply(live_tele)
 
-                    fused_tele, new_events = DataFusionEngine.fuse_telemetry_and_cv(live_tele, cv_stats)
+                    # A simulated camera must not stand in for the ultrasonic speed reading
+                    fused_tele, new_events = DataFusionEngine.fuse_telemetry_and_cv(
+                        live_tele, cv_stats, allow_cv_speed_fallback=not cv_pipeline.use_simulation
+                    )
                     fused_tele.is_simulated = False
                     simulator.telemetry = fused_tele
                     evt = new_events[0] if new_events else None
@@ -207,6 +218,7 @@ app.add_middleware(
 
 # API routes
 app.include_router(api_router, prefix=settings.API_PREFIX)
+app.include_router(ai_router, prefix=settings.API_PREFIX)
 
 
 # WebSocket endpoint for real-time live telemetry

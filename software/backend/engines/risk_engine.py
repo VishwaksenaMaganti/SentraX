@@ -78,6 +78,10 @@ class RoadRiskEngine:
             score += min(30, telemetry.hazard_count * 15)
             reasons.append(f"{telemetry.hazard_count} active hazard zone(s) in proximity (+{min(30, telemetry.hazard_count * 15)})")
 
+        # 6. Emergency vehicle priority: shown to operators, no score weight
+        if telemetry.emergency_vehicle:
+            reasons.append("Emergency vehicle priority active (RFID): yield right of way")
+
         # Clamp between 0 and 100
         clamped_score = max(0, min(100, score))
 

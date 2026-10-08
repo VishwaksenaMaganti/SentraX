@@ -23,7 +23,8 @@ class DataFusionEngine:
     @staticmethod
     def fuse_telemetry_and_cv(
         hardware_telemetry: CanonicalTelemetry,
-        cv_data: Dict[str, Any]
+        cv_data: Dict[str, Any],
+        allow_cv_speed_fallback: bool = True
     ) -> Tuple[CanonicalTelemetry, List[CanonicalEvent]]:
         """
         Takes the latest hardware telemetry and CV pipeline metrics, producing
@@ -108,7 +109,7 @@ class DataFusionEngine:
             new_events.append(event)
 
         # 5. Speed estimation fallback if hardware is idle but CV sees vehicle
-        if fused.measured_speed_kmh == 0.0 and cv_estimated_speed is not None:
+        if allow_cv_speed_fallback and fused.measured_speed_kmh == 0.0 and cv_estimated_speed is not None:
             fused.measured_speed_kmh = cv_estimated_speed
 
         # 6. Recompute Road Risk Score and SentraX Speed Recommendation

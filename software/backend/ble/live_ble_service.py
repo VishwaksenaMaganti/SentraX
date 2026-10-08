@@ -20,6 +20,8 @@ from software.backend.schemas.events import CanonicalEvent, EventType, EventSeve
 from software.backend.database.models import save_telemetry, save_event, update_device_status
 from software.backend.engines.risk_engine import RoadRiskEngine
 from software.backend.engines.recommendation_engine import RecommendationEngine
+from software.backend.engines.emergency_tracker import emergency_tracker
+from software.backend.engines.speed_tracker import speed_tracker
 
 logger = logging.getLogger("sentrax.live_ble")
 
@@ -130,6 +132,8 @@ class LiveBLEManager:
             if self.client.is_connected:
                 self.is_connected = True
                 self.connected_device_address = target_address
+                emergency_tracker.reset_link()
+                speed_tracker.reset_link()
                 logger.info("Successfully connected to physical ESP32 over BLE!")
 
                 # Subscribe to Telemetry Notifications
@@ -323,6 +327,13 @@ class LiveBLEManager:
                 hardware_standby=not is_armed
             )
 
+            # The firmware's rfid flag stays latched after a scan; read it as an edge, not a level
+            emergency_tracker.observe_packet(bool(parsed.get("rfid", 0)), alert_str, now)
+            emergency_tracker.apply(t)
+            # The firmware's speed also stays latched; show each new reading for a few seconds
+            speed_tracker.observe_packet(t.measured_speed_kmh, now)
+            speed_tracker.apply(t)
+
             if is_armed:
                 score, reasons = RoadRiskEngine.calculate_risk(t)
                 t.risk_score = score
@@ -396,7 +407,17 @@ class LiveBLEManager:
             )
             save_event(evt)
 
+            # Sent on every tag scan, while the ESP32 is still busy with its alert sequence
+            # (telemetry pauses for ~9 s), so this is the earliest emergency signal.
+            if event_name == "EMERGENCY":
+                emergency_tracker.trigger()
+
             if self.latest_live_telemetry and self.on_telemetry_broadcast:
-                asyncio.create_task(self.on_telemetry_broadcast(self.latest_live_telemetry, evt))
+                t = emergency_tracker.apply(self.latest_live_telemetry.model_copy(deep=True))
+                speed_tracker.apply(t)
+                score, reasons = RoadRiskEngine.calculate_risk(t)
+                t.risk_score = score
+                t.risk_reasons = reasons
+                asyncio.create_task(self.on_telemetry_broadcast(t, evt))
         except Exception as e:
             logger.error("Error handling BLE event notification: %s", e)

@@ -1,1230 +1,1352 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SentraX — Intelligent & Adaptive Road Safety Platform</title>
-    <!-- Stylesheet -->
+    <title>SentraX Command Center</title>
+    <meta name="description" content="SentraX intelligent road safety and smart infrastructure command center.">
+    <meta name="theme-color" content="#070A14">
+    <meta name="color-scheme" content="dark">
+    <link rel="icon" type="image/svg+xml" href="/static/images/sentrax-mark.svg">
+
+    <!-- Type: Geist + Geist Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..600&display=swap">
+
+    <!-- Icons: Phosphor -->
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+
     <link rel="stylesheet" href="/static/css/styles.css">
-    <!-- Leaflet Maps CSS -->
+
+    <!-- Leaflet (Map & Navigation fallback map) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <!-- Leaflet Maps JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
-    <!-- Sidebar Navigation -->
-    <aside class="sidebar">
-        <div class="brand-section">
-            <div class="brand-logo">SX</div>
-            <div class="brand-text">
-                <h1>SENTRAX</h1>
-                <span>SMART INFRASTRUCTURE</span>
-            </div>
-        </div>
+    <!-- Brand mark sprite (road + signal bar) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="sx-mark" viewBox="0 0 64 64">
+            <line x1="9" y1="55" x2="55" y2="9" stroke="#E5342B" stroke-width="11"/>
+            <line x1="9" y1="9" x2="55" y2="55" stroke="#3D4FC4" stroke-width="19"/>
+            <line x1="9" y1="9" x2="55" y2="55" stroke="#1E2A78" stroke-width="16"/>
+            <line x1="9" y1="9" x2="55" y2="55" stroke="#F4F6FB" stroke-width="2.2" stroke-dasharray="5 4"/>
+        </symbol>
+    </svg>
+
+    <!-- ============================================================ -->
+    <!-- NAVIGATION RAIL                                              -->
+    <!-- ============================================================ -->
+    <aside class="rail" id="rail" aria-label="Primary navigation">
+        <a href="#" class="rail-brand" id="rail-brand" aria-label="SentraX Command Center">
+            <svg class="brand-mark" aria-hidden="true"><use href="#sx-mark"/></svg>
+            <span class="brand-word">SENTRA<span>X</span></span>
+        </a>
 
         <nav class="nav-menu">
             <a href="#" class="nav-item active" data-tab="command-center">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-                Command Center
+                <i class="ph ph-gauge" aria-hidden="true"></i><span class="nav-label">Command Center</span>
             </a>
             <a href="#" class="nav-item" data-tab="live-telemetry">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                Live Telemetry
+                <i class="ph ph-pulse" aria-hidden="true"></i><span class="nav-label">Live Telemetry</span>
             </a>
             <a href="#" class="nav-item" data-tab="aerial">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                Aerial Digital Twin
+                <i class="ph ph-cube-transparent" aria-hidden="true"></i><span class="nav-label">Aerial Digital Twin</span>
             </a>
-            <a href="#" class="nav-item" data-tab="events">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                Event History
-            </a>
-            <a href="#" class="nav-item" data-tab="risk">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                Road Risk
-            </a>
-            <a href="#" class="nav-item" data-tab="analytics">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                Analytics & Trends
-            </a>
-            <a href="#" class="nav-item" data-tab="cv">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                Computer Vision
-            </a>
-            <a href="#" class="nav-item" data-tab="road-health">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                Road Health
+            <a href="#" class="nav-item" data-tab="intelligence">
+                <i class="ph ph-chart-line-up" aria-hidden="true"></i><span class="nav-label">Road Intelligence</span>
             </a>
             <a href="#" class="nav-item" data-tab="navigation">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
-                Map / Navigation
+                <i class="ph ph-map-trifold" aria-hidden="true"></i><span class="nav-label">Map &amp; Navigation</span>
             </a>
-            <a href="#" class="nav-item" data-tab="hazards">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
-                Hazard Zones
-            </a>
-            <a href="#" class="nav-item" data-tab="devices">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
-                Hardware Nodes
+            <a href="#" class="nav-item" data-tab="events">
+                <i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i><span class="nav-label">Event History</span>
             </a>
             <a href="#" class="nav-item" data-tab="settings">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                Settings
+                <i class="ph ph-gear-six" aria-hidden="true"></i><span class="nav-label">Settings</span>
             </a>
         </nav>
 
-        <div class="sidebar-footer">
-            <div>SentraX v2.4.0 Engine</div>
-            <div style="color:var(--accent-cyan); font-weight:600; margin-top:2px;">Google DeepMind Pair</div>
+        <div class="rail-foot">
+            <button type="button" class="rail-btn" data-copilot-open>
+                <i class="ph ph-sparkle" aria-hidden="true"></i><span class="nav-label">Ask SentraX</span>
+            </button>
+            <div class="rail-version"><span class="nav-label">SentraX v2.4 engine</span></div>
         </div>
     </aside>
 
-    <!-- Main Viewport -->
-    <main class="main-viewport" style="position:relative;">
-        <!-- Top App Bar -->
+    <!-- ============================================================ -->
+    <!-- MAIN VIEWPORT                                                -->
+    <!-- ============================================================ -->
+    <main class="main-viewport">
         <header class="top-header">
             <div class="header-left">
                 <div class="page-title" id="current-page-title">Command Center</div>
+                <div class="page-sub" id="current-page-sub">Live corridor overview</div>
             </div>
-            <div class="header-right" style="display:flex; align-items:center; gap:10px;">
-                <!-- ESP32 Pairing Button Pill -->
-                <button class="btn-hw-pill disconnected" id="btn-menu-esp32" title="Click to open ESP32 Gateway Pairing Menu">
+            <div class="header-right">
+                <button class="btn-hw-pill disconnected" id="btn-menu-esp32" title="Open the ESP32 pairing menu">
                     <span class="status-indicator-dot red" id="dot-esp32"></span>
                     <span id="label-esp32">ESP32: Disconnected</span>
                 </button>
-                <!-- Master System Liveness Badge -->
                 <div class="master-gate-badge standby" id="master-gate-badge">
                     <span class="pulse-dot"></span>
-                    <span id="master-gate-label">STANDBY (CONNECT ESP32)</span>
+                    <span id="master-gate-label">Standby</span>
                 </div>
-                <button class="btn btn-outline" id="btn-toggle-theme" title="Toggle Dark/Light Mode">
-                    🌓
+                <button class="btn-ask" type="button" data-copilot-open title="Ask SentraX (Ctrl+K)">
+                    <i class="ph ph-sparkle" aria-hidden="true"></i>
+                    <span class="btn-ask-label">Ask SentraX</span>
+                    <kbd class="kbd" id="kbd-hint">Ctrl K</kbd>
                 </button>
             </div>
         </header>
 
-        <!-- Hardware Standby Gate Overlay (Strict Zero Simulation Gate) -->
-        <div class="hardware-standby-overlay" id="hardware-standby-overlay">
-            <div class="standby-gate-card">
-                <div class="standby-gate-icon">
-                    <svg width="40" height="40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                </div>
-                <h2 class="standby-gate-title">SENTRAX HARDWARE PAIRING GATE</h2>
-                <p class="standby-gate-desc">
-                    Simulation mode has been disabled. Connect your <b>ESP32 Core Road Controller</b> via Bluetooth or USB COM port to arm the system and view live telemetry.
-                </p>
-                <div class="standby-modules-grid" style="display:flex; justify-content:center; max-width:460px; margin:0 auto;">
-                    <!-- Module: ESP32 -->
-                    <div class="standby-module-card" id="card-standby-esp32" style="width:100%;">
-                        <div class="standby-module-header">
-                            <div class="standby-module-title">ESP32 Core Road Controller</div>
-                            <span class="standby-chip disconnected" id="chip-standby-esp32">DISCONNECTED</span>
-                        </div>
-                        <div class="standby-module-body">
-                            <div class="subsystem-line">✓ 4x IR Presence Grid (GPIO 25, 26, 27, 33)</div>
-                            <div class="subsystem-line">✓ Dual Ultrasonic Speed Radar (US1 & US2)</div>
-                            <div class="subsystem-line">✓ Sound Acoustic Sensor & Rain Moisture</div>
-                            <div class="subsystem-line">✓ WS2812B Dynamic LEDs & E-Ink Sign</div>
-                        </div>
-                        <button class="btn btn-primary btn-block" id="btn-open-esp32-modal" style="background:#2563eb; color:#fff; font-weight:700;">
-                            PAIR ESP32 GATEWAY
-                        </button>
-                    </div>
-                </div>
-                <div class="standby-gate-footer">
-                    <span id="standby-summary-text">Waiting for ESP32 Core Controller... Connect via Bluetooth LE or USB COM to unlock live system.</span>
-                </div>
-            </div>
-        </div>
+        <div class="content" id="content-scroll">
 
-        <!-- ========================================== -->
-        <!-- 1. COMMAND CENTER (Main Overview) -->
-        <!-- ========================================== -->
-        <div class="page-container active" id="page-command-center" data-title="Command Center">
-            <div class="dashboard-grid">
-                <!-- Current Measured Speed -->
-                <div class="card" style="grid-column: span 3;">
-                    <div class="card-header">
-                        <span class="card-title">Measured Vehicle Speed</span>
-                        <span style="font-size:11px; color:var(--accent-cyan);">ULTRASONIC</span>
-                    </div>
-                    <div class="card-value">
-                        <span id="val-current-speed">0.0</span>
-                        <span class="card-unit">km/h</span>
-                    </div>
-                    <div class="card-footer">
-                        <span>Toy-Car Speed (Demo)</span>
-                    </div>
-                </div>
-
-                <!-- SentraX Recommended Speed -->
-                <div class="card" style="grid-column: span 3;">
-                    <div class="card-header">
-                        <span class="card-title">SentraX Recommended Speed</span>
-                        <span style="font-size:11px; color:var(--accent-emerald);">ADVISORY</span>
-                    </div>
-                    <div class="card-value" style="color:var(--accent-emerald);">
-                        <span id="val-rec-speed">80</span>
-                        <span class="card-unit">km/h</span>
-                    </div>
-                    <div class="card-footer">
-                        <span>Posted Limit: 80 km/h (Legal)</span>
-                    </div>
-                </div>
-
-                <!-- Road Risk Score -->
-                <div class="card" style="grid-column: span 3;">
-                    <div class="card-header">
-                        <span class="card-title">Road Risk Score</span>
-                        <span style="font-size:11px; color:var(--text-muted);">0 - 100 SCALE</span>
-                    </div>
-                    <div class="risk-meter">
-                        <div class="risk-circle" id="risk-meter-circle">
-                            <span id="val-risk-score">5</span>
+            <!-- ====================================================== -->
+            <!-- 1. COMMAND CENTER                                      -->
+            <!-- ====================================================== -->
+            <div class="page-container active" id="page-command-center" data-title="Command Center" data-sub="Live corridor overview">
+                <section class="corridor-hero reveal" id="corridor-hero" data-tone="standby" aria-label="Live corridor">
+                    <canvas class="corridor-canvas" id="corridor-canvas" aria-hidden="true"></canvas>
+                    <div class="corridor-top">
+                        <div class="corridor-readout">
+                            <div class="micro-label">Measured vehicle speed<span>Ultrasonic</span></div>
+                            <div class="hero-speed"><span id="val-current-speed">0.0</span><small>km/h</small></div>
+                            <div class="micro-note">Toy-car speed (demo)</div>
                         </div>
-                        <div style="font-size:12px; color:var(--text-secondary);">
-                            <b>SentraX Prototype</b><br>
-                            Dynamic Risk Model
+                        <div class="corridor-state-block">
+                            <div class="micro-label">Corridor state</div>
+                            <div class="corridor-state" id="corridor-state">Awaiting signal</div>
+                            <div class="micro-note" id="corridor-state-sub">Pair the ESP32 to stream live data</div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Traffic & Road Condition -->
-                <div class="card" style="grid-column: span 3;">
-                    <div class="card-header">
-                        <span class="card-title">Corridor Status</span>
-                        <span style="font-size:11px; color:var(--accent-cyan);">ENVIRONMENT</span>
-                    </div>
-                    <div style="margin-top:6px;">
-                        <div style="font-size:16px; font-weight:700;">TRAFFIC: <span id="val-traffic-level" style="color:var(--accent-cyan);">LIGHT</span></div>
-                        <div style="font-size:16px; font-weight:700; margin-top:4px;">SURFACE: <span id="val-road-cond" style="color:var(--accent-emerald);">DRY</span></div>
-                    </div>
-                    <div class="card-footer">
-                        <span>IR Grid & Moisture Sensor</span>
-                    </div>
-                </div>
-
-                <!-- Live Speed Trend Chart -->
-                <div class="card" style="grid-column: span 8; height: 320px;">
-                    <div class="card-header">
-                        <span class="card-title">Live Speed Telemetry Stream</span>
-                    </div>
-                    <div style="height: 240px;">
-                        <canvas id="chart-speed-history"></canvas>
-                    </div>
-                </div>
-
-                <!-- Real-time Incident Timeline -->
-                <div class="card" style="grid-column: span 4; height: 320px;">
-                    <div class="card-header">
-                        <span class="card-title">Live Incident Stream</span>
-                    </div>
-                    <div class="timeline-list" id="timeline-container">
-                        <!-- Populated dynamically -->
-                    </div>
-                </div>
-
-                <!-- Active Risk Reasons -->
-                <div class="card" style="grid-column: span 12;">
-                    <div class="card-header">
-                        <span class="card-title">Active Safety Risk Factors Breakdown</span>
-                    </div>
-                    <ul id="risk-reasons-list" style="margin-left: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
-                        <li>Road clear and dry (Baseline)</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 2. LIVE TELEMETRY (Hardware Sensor Grid) -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-live-telemetry" data-title="Live Telemetry">
-            <div class="dashboard-grid">
-                <div class="card" style="grid-column: span 3;">
-                    <div class="card-title">Ambient Temperature</div>
-                    <div class="card-value" id="tel-temp">26.5 °C</div>
-                    <div class="card-footer">DHT11 Sensor (GPIO 13)</div>
-                </div>
-                <div class="card" style="grid-column: span 3;">
-                    <div class="card-title">Relative Humidity</div>
-                    <div class="card-value" id="tel-humidity">55 %</div>
-                    <div class="card-footer">DHT11 Sensor (GPIO 13)</div>
-                </div>
-                <div class="card" style="grid-column: span 3;">
-                    <div class="card-title">Surface Moisture</div>
-                    <div class="card-value" id="tel-moisture">3100 (DRY)</div>
-                    <div class="card-footer">Analog Sensor (GPIO 35)</div>
-                </div>
-                <div class="card" style="grid-column: span 3;">
-                    <div class="card-title">Acoustic Sound / Crash</div>
-                    <div class="card-value" id="tel-sound">CLEAR</div>
-                    <div class="card-footer">Sound Sensor (GPIO 32 Active HIGH)</div>
-                </div>
-
-                <!-- IR Sensor Occupancy Grid -->
-                <div class="card" style="grid-column: span 6;">
-                    <div class="card-title">IR Traffic Grid (ESP32)</div>
-                    <div style="display:flex; justify-content:space-around; margin-top:20px;">
-                        <div style="text-align:center;">
-                            <div style="font-size:11px; color:var(--text-muted);">IR1 (GPIO 25)</div>
-                            <div id="ir-1-status" style="font-size:18px; font-weight:800; color:var(--accent-emerald);">CLEAR</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="font-size:11px; color:var(--text-muted);">IR2 (GPIO 26)</div>
-                            <div id="ir-2-status" style="font-size:18px; font-weight:800; color:var(--accent-emerald);">CLEAR</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="font-size:11px; color:var(--text-muted);">IR3 (GPIO 27)</div>
-                            <div id="ir-3-status" style="font-size:18px; font-weight:800; color:var(--accent-emerald);">CLEAR</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="font-size:11px; color:var(--text-muted);">IR4 (GPIO 33)</div>
-                            <div id="ir-4-status" style="font-size:18px; font-weight:800; color:var(--accent-emerald);">CLEAR</div>
-                        </div>
-                    </div>
-                    <div class="card-footer" style="margin-top:20px;">
-                        Wrong-way rule: IR4 &rarr; IR3 within 15s. Congestion: 2+ sensors occupied &ge; 5s. Stalled: 1 sensor &ge; 6s.
-                    </div>
-                </div>
-
-                <!-- Priority & Environmental Triggers -->
-                <div class="card" style="grid-column: span 6;">
-                    <div class="card-title">Priority & Environmental Triggers</div>
-                    <div style="display:flex; justify-content:space-around; margin-top:20px;">
-                        <div style="text-align:center;">
-                            <div style="font-size:11px; color:var(--text-muted);">RFID Emergency Tag</div>
-                            <div id="tel-rfid" style="font-size:16px; font-weight:800; color:var(--accent-emerald);">NONE</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="font-size:11px; color:var(--text-muted);">Night Mode (Ambient LDR)</div>
-                            <div id="tel-night" style="font-size:16px; font-weight:800; color:var(--accent-cyan);">DAYTIME</div>
-                        </div>
-                    </div>
-                    <div class="card-footer" style="margin-top:20px;">
-                        Emergency vehicle RFID clearance and ambient illumination / night mode tracking.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 3. AERIAL DIGITAL TWIN & INTERACTIVE CONTROLS -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-aerial" data-title="Physical Aerial Twin & Interactive Controls">
-            <div class="aerial-layout-grid">
-                <!-- Left: Physical Aerial View Card -->
-                <div class="card aerial-view-card">
-                    <div class="card-header">
-                        <div class="card-title-group">
-                            <span class="card-title">Physical Road Testbed — Aerial Digital Twin</span>
-                            <span class="card-subtitle">Real-time Hardware Hotspots • Hover over any sensor to inspect live telemetry</span>
-                        </div>
-                        <div class="aerial-header-badges">
-                            <span class="live-badge" id="aerial-hw-status-badge">STANDBY</span>
-                            <span class="live-badge-sub">60-LED Track</span>
-                        </div>
-                    </div>
-
-                    <!-- Interactive Aerial Image Viewport -->
-                    <div class="aerial-viewport-wrapper">
-                        <div class="aerial-image-container" id="aerial-image-container">
-                            <img src="/static/images/project_aerial.jpg" alt="SentraX Physical Roadway Aerial View" class="aerial-base-img" id="aerial-base-img">
-                            
-                            <!-- 1. GxEPD2 1.54" E-Ink Gantry (CS 16, DC 17, RST 21, BUSY 22) -->
-                            <div class="aerial-hotspot" id="hotspot-eink" style="left: 7%; top: 25%;" data-node="eink">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">INK</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">GxEPD2 1.54" E-Ink VSL Gantry</div>
-                                        <span class="tooltip-chip" id="tt-chip-eink">NORMAL</span>
-                                    </div>
-                                    <div class="tooltip-pins">SPI: CS 16 | DC 17 | RST 21 | BUSY 22</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Sign Display:</span><span class="tt-v" id="tt-val-eink-speed">80 km/h</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Active Warning:</span><span class="tt-v" id="tt-val-eink-alert">CLEAR ROAD</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Refresh Mode:</span><span class="tt-v">Partial / Fast Waveform</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Overhead gantry displaying dynamic legal speed limits and emergency advisories to approaching vehicles.</div>
-                                </div>
+                        <div class="sign-block">
+                            <div class="sign-caption">
+                                <div class="micro-label">SentraX recommended</div>
+                                <div class="micro-note">Advisory. Posted limit: 80 km/h (legal)</div>
                             </div>
-
-                            <!-- 2. US1 Ultrasonic Sensor (Speed Entry) -->
-                            <div class="aerial-hotspot" id="hotspot-us1" style="left: 9%; top: 82%;" data-node="us1">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">US1</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">Ultrasonic US1 (Speed Entry)</div>
-                                        <span class="tooltip-chip" id="tt-chip-us1">IDLE</span>
-                                    </div>
-                                    <div class="tooltip-pins">TRIG: GPIO 3 | ECHO: GPIO 34</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Beam Gate:</span><span class="tt-v" id="tt-val-us1">CLEAR (&gt;15cm)</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Pair Distance:</span><span class="tt-v">0.30 m to US2</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Speed Timer:</span><span class="tt-v" id="tt-val-us1-timer">READY</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Ingress gate for ultrasonic speed timing radar. Vehicle passing under US1 triggers microsecond timer.</div>
-                                </div>
-                            </div>
-
-                            <!-- 3. IR1 Sensor (Entrance Lane) -->
-                            <div class="aerial-hotspot" id="hotspot-ir1" style="left: 14%; top: 38%;" data-node="ir1">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">IR1</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">IR Sensor 1 (Lane Ingress)</div>
-                                        <span class="tooltip-chip" id="tt-chip-ir1">CLEAR</span>
-                                    </div>
-                                    <div class="tooltip-pins">Digital In: GPIO 25 (Active LOW)</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Status:</span><span class="tt-v" id="tt-val-ir1">CLEAR</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Stall Timer:</span><span class="tt-v" id="tt-val-ir1-stall">0.0s / 6.0s</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">LED Cluster:</span><span class="tt-v">LEDs 2..6 / 32..36</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Monitors forward entrance corridor occupancy. Continuous occlusion &ge;6s triggers localized stalled alert.</div>
-                                </div>
-                            </div>
-
-                            <!-- 4. IR2 Sensor (Mid-Forward Lane) -->
-                            <div class="aerial-hotspot" id="hotspot-ir2" style="left: 33%; top: 36%;" data-node="ir2">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">IR2</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">IR Sensor 2 (Mid-Left Sector)</div>
-                                        <span class="tooltip-chip" id="tt-chip-ir2">CLEAR</span>
-                                    </div>
-                                    <div class="tooltip-pins">Digital In: GPIO 26 (Active LOW)</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Status:</span><span class="tt-v" id="tt-val-ir2">CLEAR</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Stall Timer:</span><span class="tt-v" id="tt-val-ir2-stall">0.0s / 6.0s</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">LED Cluster:</span><span class="tt-v">LEDs 10..14 / 40..44</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Mid-way traffic occupancy detector. Used in conjunction with IR1/IR3 for multi-sensor congestion queues.</div>
-                                </div>
-                            </div>
-
-                            <!-- 5. DHT11 Sensor (Temperature & Humidity) -->
-                            <div class="aerial-hotspot" id="hotspot-dht" style="left: 42%; top: 35%;" data-node="dht">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">DHT</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">DHT11 Environmental Sensor</div>
-                                        <span class="tooltip-chip" id="tt-chip-dht">NOMINAL</span>
-                                    </div>
-                                    <div class="tooltip-pins">Single-Wire: GPIO 13</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Temperature:</span><span class="tt-v" id="tt-val-dht-temp">-- °C</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Humidity:</span><span class="tt-v" id="tt-val-dht-hum">-- %</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Heat Threshold:</span><span class="tt-v">&gt; 30.0 °C</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Tracks environmental pavement temperature and atmospheric humidity. High heat reduces speed limit to 35 km/h.</div>
-                                </div>
-                            </div>
-
-                            <!-- 6. Sound / Acoustic Sensor (Collision / Crash) -->
-                            <div class="aerial-hotspot" id="hotspot-sound" style="left: 48%; top: 35%;" data-node="sound">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">MIC</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">Acoustic Sound / Crash Sensor</div>
-                                        <span class="tooltip-chip" id="tt-chip-sound">QUIET</span>
-                                    </div>
-                                    <div class="tooltip-pins">Digital Out: GPIO 32 (Active HIGH)</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Acoustic Level:</span><span class="tt-v" id="tt-val-sound">NORMAL</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Collision State:</span><span class="tt-v" id="tt-val-collision">CLEAR</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Alert LED Response:</span><span class="tt-v">LEDs 10..13 Solid RED</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Monitors high-decibel acoustic shocks indicative of vehicular collisions and structural impacts.</div>
-                                </div>
-                            </div>
-
-                            <!-- 7. IR3 Sensor (Mid-Right Sector) -->
-                            <div class="aerial-hotspot" id="hotspot-ir3" style="left: 54%; top: 36%;" data-node="ir3">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">IR3</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">IR Sensor 3 (Mid-Right Sector)</div>
-                                        <span class="tooltip-chip" id="tt-chip-ir3">CLEAR</span>
-                                    </div>
-                                    <div class="tooltip-pins">Digital In: GPIO 27 (Active LOW)</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Status:</span><span class="tt-v" id="tt-val-ir3">CLEAR</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Wrong-Way Gate:</span><span class="tt-v" id="tt-val-ir3-ww">ARMED</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">LED Cluster:</span><span class="tt-v">LEDs 17..21 / 47..51</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Second node in wrong-way verification. When preceded by IR4 within 15 seconds, triggers immediate Wrong-Way alarm.</div>
-                                </div>
-                            </div>
-
-                            <!-- 8. Soil / Rain Moisture Sensor -->
-                            <div class="aerial-hotspot" id="hotspot-moist" style="left: 61%; top: 33%;" data-node="moist">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">H2O</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">Surface Moisture / Rain Sensor</div>
-                                        <span class="tooltip-chip" id="tt-chip-moist">DRY</span>
-                                    </div>
-                                    <div class="tooltip-pins">Analog In: GPIO 35 (ADC1_CH7)</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Raw Reading:</span><span class="tt-v" id="tt-val-moist">--</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Threshold:</span><span class="tt-v">&lt; 2000 (WET)</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Speed Cap:</span><span class="tt-v">40 km/h on Wet</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Measures pavement conductivity and water film thickness. Low ADC values trigger wet road flashing LEDs and VSL drops.</div>
-                                </div>
-                            </div>
-
-                            <!-- 9. IR4 Sensor (Exit / Wrong-Way Origin) -->
-                            <div class="aerial-hotspot" id="hotspot-ir4" style="left: 80%; top: 34%;" data-node="ir4">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">IR4</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">IR Sensor 4 (Corridor Exit / Reverse Gate)</div>
-                                        <span class="tooltip-chip" id="tt-chip-ir4">CLEAR</span>
-                                    </div>
-                                    <div class="tooltip-pins">Digital In: GPIO 33 (Active LOW)</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Status:</span><span class="tt-v" id="tt-val-ir4">CLEAR</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Wrong-Way Prime:</span><span class="tt-v" id="tt-val-ir4-ww">IDLE</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">LED Cluster:</span><span class="tt-v">LEDs 24..28 / 54..58</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Corridor exit sensor. Vehicles moving against traffic trigger IR4 first, arming a 15-second window for IR3 detection.</div>
-                                </div>
-                            </div>
-
-                            <!-- 10. Ultrasonic US2 (Speed Gate Finish) -->
-                            <div class="aerial-hotspot" id="hotspot-us2" style="left: 85%; top: 88%;" data-node="us2">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">US2</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">Ultrasonic US2 (Speed Exit)</div>
-                                        <span class="tooltip-chip" id="tt-chip-us2">IDLE</span>
-                                    </div>
-                                    <div class="tooltip-pins">TRIG: GPIO 14 | ECHO: GPIO 36</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Beam Gate:</span><span class="tt-v" id="tt-val-us2">CLEAR (&gt;15cm)</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Measured Speed:</span><span class="tt-v" id="tt-val-measured-spd">-- km/h</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Evaluation:</span><span class="tt-v" id="tt-val-speed-eval">NORMAL</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Stop-gate for ultrasonic speed calculation. Computes exact time delta across the 0.30m test track corridor.</div>
-                                </div>
-                            </div>
-
-                            <!-- 11. WS2812B Dynamic LED Strip (60 Smart Pixels) -->
-                            <div class="aerial-hotspot" id="hotspot-leds" style="left: 49%; top: 58%;" data-node="leds">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">LED</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">WS2812B 60x Smart Roadway LEDs</div>
-                                        <span class="tooltip-chip" id="tt-chip-leds">ACTIVE</span>
-                                    </div>
-                                    <div class="tooltip-pins">Data Line: GPIO 2 (60 Pixels GRB 800kHz)</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Active Pattern:</span><span class="tt-v" id="tt-val-led-pattern">NORMAL (AMBER)</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Roadway Mapping:</span><span class="tt-v">Swapped Halves (0..29 &harr; 30..59)</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Stalled Localized:</span><span class="tt-v" id="tt-val-led-stalled-target">STANDBY</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Dual roadside lane dynamic lighting strip. Signals normal amber illumination, collision red warning, localized stalled flashing, and wet road pulses.</div>
-                                </div>
-                            </div>
-
-                            <!-- 12. ESP32 Core Controller (Main Node MCU) -->
-                            <div class="aerial-hotspot" id="hotspot-esp32" style="left: 38%; top: 88%;" data-node="esp32">
-                                <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">MCU</span></span>
-                                <div class="hotspot-tooltip">
-                                    <div class="tooltip-header">
-                                        <div class="tooltip-title">ESP32 Core Microcontroller</div>
-                                        <span class="tooltip-chip" id="tt-chip-esp32">CONNECTED</span>
-                                    </div>
-                                    <div class="tooltip-pins">ESP-WROOM-32 (Dual Core 240MHz)</div>
-                                    <div class="tooltip-data">
-                                        <div class="tooltip-row"><span class="tt-k">Bluetooth BLE:</span><span class="tt-v">SENTRAX-ESP32</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">UART Bridge:</span><span class="tt-v">115200 Baud</span></div>
-                                        <div class="tooltip-row"><span class="tt-k">Core Loop Rate:</span><span class="tt-v">50 Hz Telemetry</span></div>
-                                    </div>
-                                    <div class="tooltip-desc">Main system brain orchestrating all real-time sensor interrupts, risk computations, dynamic LED logic, and BLE/Serial telemetry broadcast.</div>
-                                </div>
+                            <div class="speed-sign" id="speed-sign">
+                                <span class="speed-sign-value" id="val-rec-speed">80</span>
+                                <span class="speed-sign-unit">km/h</span>
                             </div>
                         </div>
                     </div>
+                </section>
 
-                    <!-- Sensor Status Legend -->
-                    <div class="aerial-legend-bar">
-                        <div class="legend-item"><span class="legend-dot green"></span> Clear / Nominal</div>
-                        <div class="legend-item"><span class="legend-dot red"></span> Triggered / Alert Active</div>
-                        <div class="legend-item"><span class="legend-dot amber"></span> Caution / Warning</div>
-                        <div class="legend-item"><span class="legend-dot cyan"></span> Environmental Reading</div>
-                        <div class="legend-item"><span class="legend-dot gray"></span> Standby / Awaiting Hardware</div>
-                    </div>
-                </div>
-
-                <!-- Right Column: E-Ink Digital Twin & Manual Controls -->
-                <div class="aerial-sidebar-column">
-                    <!-- 1. Live GxEPD2 1.54" E-Ink Display Digital Twin -->
-                    <div class="card eink-twin-card">
-                        <div class="card-header">
-                            <div class="card-title-group">
-                                <span class="card-title">Live 1.54" GxEPD2 E-Ink Display</span>
-                                <span class="card-subtitle">Real-time Digital Twin of Overhead Gantry Sign</span>
-                            </div>
-                            <span class="eink-tech-pill">200×200 BW E-PAPER</span>
-                        </div>
-
-                        <!-- Authentic E-Ink Screen Frame -->
-                        <div class="eink-display-bezel">
-                            <div class="eink-screen-surface" id="eink-screen-surface">
-                                <div class="eink-header-strip">
-                                    <span class="eink-hdr-left">SENTRAX VSL SIGN</span>
-                                    <span class="eink-hdr-right" id="eink-refresh-indicator">● LIVE</span>
-                                </div>
-
-                                <div class="eink-body-content">
-                                    <!-- Dynamic European Speed Limit Circle -->
-                                    <div class="eink-speed-sign-ring">
-                                        <div class="eink-speed-number" id="eink-speed-val">80</div>
-                                        <div class="eink-speed-kmh">km/h</div>
-                                    </div>
-
-                                    <!-- Alert Banner Box -->
-                                    <div class="eink-alert-box" id="eink-alert-box">
-                                        <div class="eink-alert-icon" id="eink-alert-icon">✓</div>
-                                        <div class="eink-alert-main" id="eink-alert-main">ROAD CLEAR</div>
-                                        <div class="eink-alert-sub" id="eink-alert-sub">NORMAL LIMIT: 80 KM/H</div>
-                                    </div>
-                                </div>
-
-                                <div class="eink-footer-strip">
-                                    <span>MEASURED: <b id="eink-measured-spd">0.0</b> km/h</span>
-                                    <span>STATUS: <b id="eink-status-label">NORMAL</b></span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="eink-meta-footer">
-                            <div>Hardware Driver: <b>GxEPD2_154_D67</b></div>
-                            <div>Wiring: <b>CS 16 • DC 17 • RST 21 • BUSY 22</b></div>
-                        </div>
-                    </div>
-
-                    <!-- 2. Manual Controls & Alert Injection Panel -->
-                    <div class="card manual-controls-card">
-                        <div class="card-header">
-                            <div class="card-title-group">
-                                <span class="card-title">Hardware Command & Alert Console</span>
-                                <span class="card-subtitle">Bidirectional Sync with Physical ESP32, LEDs & E-Ink</span>
-                            </div>
-                            <span class="live-badge" style="background:rgba(59,130,246,0.15); color:var(--accent-blue); border-color:var(--accent-blue);">LIVE COMMANDS</span>
-                        </div>
-
-                        <!-- A. Speed Control -->
-                        <div class="ctrl-subpanel">
-                            <div class="ctrl-subpanel-title">
-                                <span>Permitted Road Speed Override</span>
-                                <span class="ctrl-speed-display"><span id="ctrl-slider-val">80</span> km/h</span>
-                            </div>
-                            <div class="ctrl-slider-row">
-                                <input type="range" min="20" max="120" step="5" value="80" class="ctrl-slider" id="input-speed-slider">
-                            </div>
-                            <div class="ctrl-presets-row">
-                                <button class="btn-preset" data-speed="35">35 (High Temp)</button>
-                                <button class="btn-preset" data-speed="40">40 (Wet Road)</button>
-                                <button class="btn-preset" data-speed="60">60 (Congestion)</button>
-                                <button class="btn-preset" data-speed="70">70 (Moderate)</button>
-                                <button class="btn-preset active" data-speed="80">80 (Normal Limit)</button>
-                            </div>
-                            <button class="btn btn-primary btn-block" id="btn-apply-speed" style="margin-top:10px; font-weight:700;">
-                                ⚡ TRANSMIT SPEED TO HARDWARE
-                            </button>
-                        </div>
-
-                        <!-- B. Manual Alert Triggers -->
-                        <div class="ctrl-subpanel" style="margin-top:16px;">
-                            <div class="ctrl-subpanel-title">
-                                <span>Trigger Safety Alerts & LED Scenarios</span>
-                                <span style="font-size:11px; color:var(--text-muted);">Commands physical WS2812B LEDs</span>
-                            </div>
-
-                            <!-- Stalled IR Selector -->
-                            <div class="ctrl-stalled-select-row">
-                                <label for="select-stalled-ir">Stalled Vehicle IR Node:</label>
-                                <select id="select-stalled-ir" class="ctrl-select">
-                                    <option value="0">IR1 (Entrance - LEDs 2..6)</option>
-                                    <option value="1" selected>IR2 (Mid-Left - LEDs 10..14)</option>
-                                    <option value="2">IR3 (Mid-Right - LEDs 17..21)</option>
-                                    <option value="3">IR4 (Corridor Exit - LEDs 24..28)</option>
-                                </select>
-                            </div>
-
-                            <div class="alert-buttons-grid">
-                                <button class="btn-alert-cmd danger" data-alert="COLLISION">
-                                    <span class="cmd-icon">💥</span>
-                                    <span class="cmd-text"><b>COLLISION</b><small>Acoustic Crash</small></span>
-                                </button>
-                                <button class="btn-alert-cmd danger" data-alert="WRONG_WAY">
-                                    <span class="cmd-icon">⛔</span>
-                                    <span class="cmd-text"><b>WRONG WAY</b><small>Reverse Direction</small></span>
-                                </button>
-                                <button class="btn-alert-cmd warning" data-alert="STALLED">
-                                    <span class="cmd-icon">🛑</span>
-                                    <span class="cmd-text"><b>STALLED CAR</b><small>Local IR Flashing</small></span>
-                                </button>
-                                <button class="btn-alert-cmd warning" data-alert="CONGESTION">
-                                    <span class="cmd-icon">🚗</span>
-                                    <span class="cmd-text"><b>CONGESTION</b><small>High Density</small></span>
-                                </button>
-                                <button class="btn-alert-cmd info" data-alert="WET_ROAD">
-                                    <span class="cmd-icon">🌧️</span>
-                                    <span class="cmd-text"><b>WET ROAD</b><small>Rain / Slick Surface</small></span>
-                                </button>
-                                <button class="btn-alert-cmd info" data-alert="HIGH_TEMP">
-                                    <span class="cmd-icon">☀️</span>
-                                    <span class="cmd-text"><b>HIGH TEMP</b><small>Pavement Overheat</small></span>
-                                </button>
-                                <button class="btn-alert-cmd purple" data-alert="EMERGENCY">
-                                    <span class="cmd-icon">🚨</span>
-                                    <span class="cmd-text"><b>EMERGENCY</b><small>RFID Priority Yield</small></span>
-                                </button>
-                                <button class="btn-alert-cmd success" data-alert="NORMAL">
-                                    <span class="cmd-icon">✅</span>
-                                    <span class="cmd-text"><b>CLEAR / NORMAL</b><small>Standard Baseline</small></span>
-                                </button>
-                            </div>
-
-                            <div class="ctrl-feedback-banner" id="ctrl-feedback-banner">
-                                Ready to transmit commands to physical hardware.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 4. EVENT HISTORY -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-events" data-title="Event History">
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">Persistent Incident Log</span>
-                    <button class="btn btn-outline" onclick="fetchInitialData()">Refresh</button>
-                </div>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Event Type</th>
-                            <th>Severity</th>
-                            <th>Source</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody id="events-table-body">
-                        <!-- Populated dynamically -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 4. ROAD RISK ANALYSIS -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-risk" data-title="Road Risk Analysis">
-            <div class="dashboard-grid">
-                <div class="card" style="grid-column: span 6;">
-                    <div class="card-title">Risk Trend Progression</div>
-                    <div style="height:260px; margin-top:15px;">
-                        <canvas id="chart-risk-trend"></canvas>
-                    </div>
-                </div>
-                <div class="card" style="grid-column: span 6;">
-                    <div class="card-title">SentraX Scoring Weights Matrix</div>
-                    <div style="font-size:13px; color:var(--text-secondary); line-height:2.0; margin-top:15px;">
-                        <div>Collision Detected: <b style="color:var(--accent-rose);">+50</b></div>
-                        <div>Wrong-Way Vehicular Entry: <b style="color:var(--accent-rose);">+40</b></div>
-                        <div>Stalled Vehicle on Corridor: <b style="color:var(--accent-amber);">+25</b></div>
-                        <div>Overspeed Violation (&gt; 4.0 km/h demo): <b style="color:var(--accent-amber);">+20</b></div>
-                        <div>Potholes Detected Ahead: <b style="color:var(--accent-amber);">+15</b></div>
-                        <div>Wet Road Surface (&lt; 2000 moisture): <b style="color:var(--accent-cyan);">+15</b></div>
-                        <div>Corridor Traffic Congestion (&ge; 5s): <b style="color:var(--accent-cyan);">+10</b></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 5. ANALYTICS & TRENDS -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-analytics" data-title="Analytics & Trends">
-            <div class="dashboard-grid">
-                <div class="card" style="grid-column: span 4;">
-                    <div class="card-title">Total Corridor Incidents</div>
-                    <div class="card-value" id="an-total">42</div>
-                    <div class="card-footer">Aggregated across all sessions</div>
-                </div>
-                <div class="card" style="grid-column: span 4;">
-                    <div class="card-title">Average Toy-Car Speed</div>
-                    <div class="card-value" id="an-speed">4.1 km/h</div>
-                    <div class="card-footer">Demo ultrasonic readings</div>
-                </div>
-                <div class="card" style="grid-column: span 4;">
-                    <div class="card-title">Average Road Health</div>
-                    <div class="card-value" id="an-health">82 / 100</div>
-                    <div class="card-footer">Moderate Safety Band</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 6. COMPUTER VISION (Phone Camera & Tracking) -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-cv" data-title="Computer Vision Subsystem">
-            <div class="dashboard-grid">
-                <div class="card" style="grid-column: span 8;">
-                    <div class="card-header">
-                        <span class="card-title">Live Vision Stream (Phone Camera / Simulated Perception)</span>
-                        <span style="font-size:11px; color:var(--accent-cyan);">640x360 MJPEG</span>
-                    </div>
-                    <div class="cv-monitor-box">
-                        <img src="/api/cv/feed" alt="SentraX CV Camera Feed">
-                        <div class="cv-hud-overlay">SENTRAX CV DETECTOR: ACTIVE</div>
-                    </div>
-                </div>
-                <div class="card" style="grid-column: span 4;">
-                    <div class="card-header">
-                        <span class="card-title">Tracked Objects (Phone Camera)</span>
-                    </div>
-                    <div style="font-size:12px; color:var(--text-secondary); line-height:1.8;">
-                        <div>Perception Model: <b>Multi-Class Motion & Contour</b></div>
-                        <div>Speed Estimation: <b style="color:var(--accent-amber);">ESTIMATED (Uncalibrated)</b></div>
-                        <div>Target Classes: <b>Car, Bike, Truck, Bus, Pedestrian, Pothole</b></div>
-                    </div>
-                    <div style="margin-top:20px;">
-                        <button class="btn btn-outline" style="width:100%; margin-bottom:10px;" data-scenario="POTHOLE">Simulate Pothole in View</button>
-                        <button class="btn btn-outline" style="width:100%;" data-scenario="WRONG_WAY">Simulate Wrong-Way Trajectory</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 7. ROAD HEALTH -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-road-health" data-title="Road Health Intelligence">
-            <div class="dashboard-grid">
-                <div class="card" style="grid-column: span 6;">
-                    <div class="card-title">Prototype Road Health Score</div>
-                    <div class="card-value" style="color:var(--accent-emerald);">84 / 100</div>
-                    <div style="margin-top:10px; font-size:14px; font-weight:700; color:var(--accent-amber);">BAND: MODERATE HEALTH</div>
-                    <div class="card-footer">Prototype metrics - not official government rating.</div>
-                </div>
-                <div class="card" style="grid-column: span 6;">
-                    <div class="card-title">Health Bands Reference</div>
-                    <div style="font-size:13px; line-height:2.0; margin-top:10px;">
-                        <div>85 - 100: <b style="color:var(--status-good);">GOOD</b> (Pristine asphalt, clear markings)</div>
-                        <div>65 - 84: <b style="color:var(--status-moderate);">MODERATE</b> (Minor wear, light traffic wear)</div>
-                        <div>40 - 64: <b style="color:var(--status-poor);">POOR</b> (Pothole clusters, wet sections)</div>
-                        <div>0 - 39: <b style="color:var(--status-critical);">CRITICAL</b> (Severe damage, frequent crashes)</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 8. MAP / NAVIGATION (IN-CAR SCREEN REPLICA) -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-navigation" data-title="Google Maps In-Car Navigation">
-            <div class="nav-screen-layout" id="nav-layout-wrapper">
-                
-                <!-- iPhone 16 Pro Device Frame (Exact visual replica of uploaded image) -->
-                <div class="iphone-frame" id="nav-iphone-frame">
-                    
-                    <!-- Dynamic Island Notch -->
-                    <div class="dynamic-island">
-                        <div class="dynamic-island-camera"></div>
-                        <div class="dynamic-island-sensor"></div>
-                    </div>
-
-                    <!-- iOS Top Status Bar -->
-                    <div class="iphone-status-bar">
-                        <span class="iphone-time" id="nav-live-clock">6:22</span>
-                        <div class="iphone-status-icons">
-                            <!-- Cellular Signal -->
-                            <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.57 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/><circle cx="12" cy="12" r="3"/></svg>
-                            <!-- Wi-Fi -->
-                            <svg viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4zm0 3.5c3.67 0 7.02 1.39 9.58 3.68L12 18.25 2.42 11.18C4.98 8.89 8.33 7.5 12 7.5z"/></svg>
-                            <!-- Battery with Lightning Bolt -->
-                            <svg viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4zM11 20v-5.5H9L13 7v5.5h2L11 20z"/></svg>
-                        </div>
-                    </div>
-
-                    <!-- Weather Pill Widget (Left) -->
-                    <div class="weather-pill">
-                        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
-                        <span class="weather-pill-temp"><span id="nav-weather-temp">26</span>°</span>
-                        <div class="weather-pill-divider"></div>
-                        <div class="weather-pill-aqi">
-                            <span>AQI <span id="nav-weather-aqi">72</span></span>
-                            <div class="aqi-dot"></div>
-                        </div>
-                    </div>
-
-                    <!-- Map Viewport Container -->
-                    <div id="sentrax-nav-map" class="nav-phone-map"></div>
-
-                    <!-- Floating Action Buttons on the Right (Layers, Navigation Mode, Compass) -->
-                    <div class="nav-floating-actions">
-                        <button class="nav-float-btn" id="btn-map-layers" title="Toggle Map Layer (Dark / Satellite)">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                        </button>
-                        <button class="nav-float-btn" id="btn-map-car" title="Center Navigation Vehicle">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 17h.01M16 17h.01M4 11l2-6h12l2 6M4 11h16M4 11v6a1 1 0 001 1h1m14-7v6a1 1 0 01-1 1h-1"/></svg>
-                        </button>
-                        <button class="nav-float-btn" id="btn-map-compass" title="Fit Entire Route">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                        </button>
-                    </div>
-
-                    <!-- Directions & Live Route Metrics Bottom Sheet (Exact replica) -->
-                    <div class="nav-bottom-drawer" id="nav-bottom-drawer">
-                        <!-- Top Drag Handle -->
-                        <div class="nav-drawer-drag-handle" id="nav-drawer-toggle"></div>
-
-                        <!-- Header -->
-                        <div class="nav-drawer-header">
-                            <div class="nav-drawer-title">Directions</div>
-                            <button class="nav-drawer-close" id="btn-close-directions" title="Collapse / Expand Drawer">
-                                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                            </button>
-                        </div>
-
-                        <!-- Subtitle -->
-                        <div class="nav-drawer-subtitle">Live Route Metrics</div>
-
-                        <!-- Card 1: Road Health -->
-                        <div class="nav-metric-box">
-                            <div class="nav-metric-icon-wrap">
-                                <!-- Road Perspective Icon -->
-                                <svg class="road-icon-graphic" viewBox="0 0 32 32" fill="none">
-                                    <path d="M9 28L13 4H19L23 28H9Z" fill="#2B303C"/>
-                                    <path d="M8 29L12.5 3H19.5L24 29" stroke="#71717A" stroke-width="2" stroke-linecap="round"/>
-                                    <line x1="16" y1="5" x2="16" y2="10" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="2 2"/>
-                                    <line x1="16" y1="14" x2="16" y2="20" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="2 2"/>
-                                    <line x1="16" y1="24" x2="16" y2="28" stroke="#FFFFFF" stroke-width="2"/>
+                <div class="grid-12">
+                    <section class="card span-7 risk-card reveal">
+                        <div class="risk-instrument">
+                            <div class="risk-circle" id="risk-meter-circle">
+                                <svg class="dial" viewBox="0 0 220 220" aria-hidden="true">
+                                    <path class="dial-band good" d="M 27.73 157.5 A 95 95 0 1 1 192.27 157.5" pathLength="100"/>
+                                    <path class="dial-band warn" d="M 27.73 157.5 A 95 95 0 1 1 192.27 157.5" pathLength="100"/>
+                                    <path class="dial-band crit" d="M 27.73 157.5 A 95 95 0 1 1 192.27 157.5" pathLength="100"/>
+                                    <g class="dial-ticks" id="dial-ticks"></g>
+                                    <path class="dial-track" d="M 37.69 151.75 A 83.5 83.5 0 1 1 182.31 151.75" pathLength="100"/>
+                                    <path class="dial-fill" id="gauge-fill" d="M 37.69 151.75 A 83.5 83.5 0 1 1 182.31 151.75" pathLength="100"/>
+                                    <g class="dial-needle" id="dial-needle">
+                                        <line x1="110" y1="122" x2="110" y2="44"/>
+                                        <circle cx="110" cy="110" r="6"/>
+                                    </g>
                                 </svg>
+                                <div class="dial-readout">
+                                    <span class="dial-value" id="val-risk-score">5</span>
+                                    <span class="dial-max">/ 100</span>
+                                </div>
                             </div>
-                            <div class="nav-metric-body">
-                                <div class="nav-metric-tag">Road Health</div>
-                                <div class="nav-metric-headline">
-                                    <span id="nav-road-health-val">68% (Fair)</span>
-                                </div>
-                                <div class="nav-health-track">
-                                    <div class="nav-health-fill" id="nav-road-health-bar" style="width: 68%;"></div>
-                                </div>
+                            <div class="dial-caption">
+                                <span class="risk-band" id="risk-band-label">Low risk</span>
+                                <span class="micro-note">Road risk score, SentraX dynamic risk model</span>
+                            </div>
+                        </div>
+                        <div class="risk-factors">
+                            <div class="card-head">
+                                <h2 class="card-title">Active safety risk factors</h2>
+                                <button class="btn btn-ghost btn-sm" type="button" data-ask="Explain the current road risk score and each active risk factor in plain English.">
+                                    <i class="ph ph-sparkle" aria-hidden="true"></i>Explain with AI
+                                </button>
+                            </div>
+                            <ul class="factor-list" id="risk-reasons-list">
+                                <li>Road clear and dry (baseline)</li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <section class="card span-5 conditions-card reveal">
+                        <div class="card-head">
+                            <h2 class="card-title">Corridor conditions</h2>
+                            <span class="card-meta">IR grid, moisture and DHT11</span>
+                        </div>
+                        <div class="cond-grid">
+                            <div class="cond"><i class="ph ph-car-profile" aria-hidden="true"></i><span class="cond-label">Traffic</span><span class="cond-value state-text" id="val-traffic-level">LIGHT</span></div>
+                            <div class="cond"><i class="ph ph-drop-half" aria-hidden="true"></i><span class="cond-label">Surface</span><span class="cond-value state-text" id="val-road-cond">DRY</span></div>
+                            <div class="cond"><i class="ph ph-thermometer-simple" aria-hidden="true"></i><span class="cond-label">Temperature</span><span class="cond-value" id="cc-temp">--</span></div>
+                            <div class="cond"><i class="ph ph-drop" aria-hidden="true"></i><span class="cond-label">Humidity</span><span class="cond-value" id="cc-hum">--</span></div>
+                            <div class="cond"><i class="ph ph-siren" aria-hidden="true"></i><span class="cond-label">Emergency tag</span><span class="cond-value state-text" id="cc-rfid">--</span></div>
+                            <div class="cond"><i class="ph ph-moon-stars" aria-hidden="true"></i><span class="cond-label">Ambient light</span><span class="cond-value state-text" id="cc-night">--</span></div>
+                        </div>
+                    </section>
+
+                    <section class="card span-8 reveal">
+                        <div class="card-head">
+                            <h2 class="card-title">Live speed telemetry</h2>
+                            <div class="chart-legend">
+                                <span><i class="legend-swatch measured"></i>Measured</span>
+                                <span><i class="legend-swatch recommended"></i>Recommended</span>
+                            </div>
+                        </div>
+                        <div class="chart-box">
+                            <canvas id="chart-speed-history"></canvas>
+                        </div>
+                    </section>
+
+                    <section class="card span-4 card-stream reveal">
+                        <div class="card-head">
+                            <h2 class="card-title">Live incident stream</h2>
+                            <span class="card-meta">Newest first</span>
+                        </div>
+                        <div class="timeline-list" id="timeline-container"></div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- ====================================================== -->
+            <!-- 2. LIVE TELEMETRY                                      -->
+            <!-- ====================================================== -->
+            <div class="page-container" id="page-live-telemetry" data-title="Live Telemetry" data-sub="Every physical sensor on the ESP32, in real time">
+                <div class="grid-12">
+                    <section class="card span-3 sensor-tile reveal">
+                        <div class="sensor-icon"><i class="ph ph-thermometer-simple" aria-hidden="true"></i></div>
+                        <div class="sensor-label">Ambient temperature</div>
+                        <div class="sensor-value" id="tel-temp">26.5 °C</div>
+                        <canvas class="spark" id="spark-temp" aria-hidden="true"></canvas>
+                        <div class="sensor-src">DHT11 sensor <span class="mono">GPIO 13</span></div>
+                    </section>
+                    <section class="card span-3 sensor-tile reveal">
+                        <div class="sensor-icon"><i class="ph ph-drop" aria-hidden="true"></i></div>
+                        <div class="sensor-label">Relative humidity</div>
+                        <div class="sensor-value" id="tel-humidity">55 %</div>
+                        <canvas class="spark" id="spark-hum" aria-hidden="true"></canvas>
+                        <div class="sensor-src">DHT11 sensor <span class="mono">GPIO 13</span></div>
+                    </section>
+                    <section class="card span-3 sensor-tile reveal">
+                        <div class="sensor-icon"><i class="ph ph-cloud-rain" aria-hidden="true"></i></div>
+                        <div class="sensor-label">Surface moisture</div>
+                        <div class="sensor-value" id="tel-moisture">3100 (DRY)</div>
+                        <canvas class="spark" id="spark-moist" aria-hidden="true"></canvas>
+                        <div class="sensor-src">Analog sensor <span class="mono">GPIO 35</span></div>
+                    </section>
+                    <section class="card span-3 sensor-tile reveal">
+                        <div class="sensor-icon"><i class="ph ph-waveform" aria-hidden="true"></i></div>
+                        <div class="sensor-label">Acoustic sound / crash</div>
+                        <div class="sensor-value state-text" id="tel-sound">CLEAR</div>
+                        <canvas class="spark" id="spark-sound" aria-hidden="true"></canvas>
+                        <div class="sensor-src">Sound sensor <span class="mono">GPIO 32, active high</span></div>
+                    </section>
+
+                    <section class="card span-8">
+                        <div class="card-head">
+                            <h2 class="card-title">IR traffic grid</h2>
+                            <span class="card-meta">ESP32 presence sensors</span>
+                        </div>
+                        <div class="lane-track">
+                            <div class="lane-node">
+                                <div class="lane-node-id">IR1</div>
+                                <div class="lane-node-status" id="ir-1-status">CLEAR</div>
+                                <div class="lane-node-pin mono">GPIO 25</div>
+                            </div>
+                            <div class="lane-node">
+                                <div class="lane-node-id">IR2</div>
+                                <div class="lane-node-status" id="ir-2-status">CLEAR</div>
+                                <div class="lane-node-pin mono">GPIO 26</div>
+                            </div>
+                            <div class="lane-node">
+                                <div class="lane-node-id">IR3</div>
+                                <div class="lane-node-status" id="ir-3-status">CLEAR</div>
+                                <div class="lane-node-pin mono">GPIO 27</div>
+                            </div>
+                            <div class="lane-node">
+                                <div class="lane-node-id">IR4</div>
+                                <div class="lane-node-status" id="ir-4-status">CLEAR</div>
+                                <div class="lane-node-pin mono">GPIO 33</div>
+                            </div>
+                        </div>
+                        <ul class="rule-list">
+                            <li><b>Wrong-way</b> IR4 then IR3 within 15 s</li>
+                            <li><b>Congestion</b> 2+ sensors occupied for 5 s or more</li>
+                            <li><b>Stalled</b> 1 sensor occupied for 6 s or more</li>
+                        </ul>
+                    </section>
+
+                    <section class="card span-4">
+                        <div class="card-head">
+                            <h2 class="card-title">Ultrasonic speed gate</h2>
+                            <span class="card-meta">0.30 m baseline</span>
+                        </div>
+                        <dl class="kv-list">
+                            <div class="kv-row">
+                                <dt>Measured speed</dt>
+                                <dd class="speed-reading" id="tel-speed">STANDBY</dd>
+                            </div>
+                            <div class="kv-row">
+                                <dt>US1 entry beam</dt>
+                                <dd class="state-text" id="tel-us1">STANDBY</dd>
+                            </div>
+                            <div class="kv-row">
+                                <dt>US2 exit beam</dt>
+                                <dd class="state-text" id="tel-us2">STANDBY</dd>
+                            </div>
+                        </dl>
+                        <p class="card-note">Speed is the time a vehicle takes to cross from US1 to US2.</p>
+                    </section>
+
+                    <section class="card span-12 trigger-strip">
+                        <div class="trigger-cell">
+                            <div class="sensor-icon"><i class="ph ph-siren" aria-hidden="true"></i></div>
+                            <div>
+                                <div class="sensor-label">RFID emergency tag</div>
+                                <div class="trigger-value state-text" id="tel-rfid">NONE</div>
+                            </div>
+                        </div>
+                        <div class="trigger-cell">
+                            <div class="sensor-icon"><i class="ph ph-moon-stars" aria-hidden="true"></i></div>
+                            <div>
+                                <div class="sensor-label">Night mode (ambient LDR)</div>
+                                <div class="trigger-value state-text" id="tel-night">DAYTIME</div>
+                            </div>
+                        </div>
+                        <p class="trigger-note">Emergency vehicle RFID clearance and ambient illumination tracking.</p>
+                    </section>
+                </div>
+            </div>
+
+            <!-- ====================================================== -->
+            <!-- 3. AERIAL DIGITAL TWIN & INTERACTIVE CONTROLS          -->
+            <!-- ====================================================== -->
+            <div class="page-container" id="page-aerial" data-title="Aerial Digital Twin" data-sub="Physical testbed hotspots, E-Ink twin and hardware commands">
+                <div class="aerial-layout-grid">
+                    <section class="card aerial-view-card">
+                        <div class="card-head">
+                            <div>
+                                <h2 class="card-title">Physical road testbed</h2>
+                                <p class="card-sub">Hover any sensor to inspect its live telemetry</p>
+                            </div>
+                            <div class="aerial-header-badges">
+                                <span class="live-badge simulated" id="aerial-hw-status-badge">STANDBY</span>
+                                <span class="live-badge-sub">60-LED track</span>
                             </div>
                         </div>
 
-                        <!-- Card 2: Road Anatomy -->
-                        <div class="nav-metric-box">
-                            <div class="nav-metric-icon-wrap">
-                                <!-- Speed Limit Sign with Verified Shield -->
-                                <div class="speed-sign-graphic">
-                                    <span class="sign-title">LIMIT</span>
-                                    <span class="sign-val" id="nav-sign-limit-val">30</span>
-                                    <div class="speed-sign-shield">
-                                        <svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
+                        <div class="aerial-viewport-wrapper">
+                            <div class="aerial-image-container" id="aerial-image-container">
+                                <img src="/static/images/project_aerial.jpg" alt="SentraX physical roadway, aerial view" class="aerial-base-img" id="aerial-base-img">
+
+                                <!-- 1. GxEPD2 1.54" E-Ink Gantry -->
+                                <div class="aerial-hotspot" id="hotspot-eink" style="left: 7%; top: 25%;" data-node="eink">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">INK</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">GxEPD2 1.54" E-Ink VSL gantry</div>
+                                            <span class="tooltip-chip" id="tt-chip-eink">NORMAL</span>
+                                        </div>
+                                        <div class="tooltip-pins">SPI: CS 16 | DC 17 | RST 21 | BUSY 22</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Sign display</span><span class="tt-v" id="tt-val-eink-speed">80 km/h</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Active warning</span><span class="tt-v" id="tt-val-eink-alert">CLEAR ROAD</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Refresh mode</span><span class="tt-v">Partial / fast waveform</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Overhead gantry displaying dynamic speed limits and emergency advisories to approaching vehicles.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 2. US1 Ultrasonic Sensor (Speed Entry) -->
+                                <div class="aerial-hotspot" id="hotspot-us1" style="left: 9%; top: 82%;" data-node="us1">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">US1</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">Ultrasonic US1 (speed entry)</div>
+                                            <span class="tooltip-chip" id="tt-chip-us1">IDLE</span>
+                                        </div>
+                                        <div class="tooltip-pins">TRIG: GPIO 3 | ECHO: GPIO 34</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Beam gate</span><span class="tt-v" id="tt-val-us1">CLEAR (&gt;15cm)</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Pair distance</span><span class="tt-v">0.30 m to US2</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Speed timer</span><span class="tt-v" id="tt-val-us1-timer">READY</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Ingress gate for the ultrasonic speed timer. A vehicle passing under US1 starts the microsecond timer.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 3. IR1 Sensor (Entrance Lane) -->
+                                <div class="aerial-hotspot" id="hotspot-ir1" style="left: 14%; top: 38%;" data-node="ir1">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">IR1</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">IR sensor 1 (lane ingress)</div>
+                                            <span class="tooltip-chip" id="tt-chip-ir1">CLEAR</span>
+                                        </div>
+                                        <div class="tooltip-pins">Digital in: GPIO 25 (active low)</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Status</span><span class="tt-v" id="tt-val-ir1">CLEAR</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Stall timer</span><span class="tt-v" id="tt-val-ir1-stall">0.0s / 6.0s</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">LED cluster</span><span class="tt-v">LEDs 2..6 / 32..36</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Monitors forward entrance occupancy. Continuous occlusion for 6 s or more triggers a localized stalled alert.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 4. IR2 Sensor (Mid-Forward Lane) -->
+                                <div class="aerial-hotspot" id="hotspot-ir2" style="left: 33%; top: 36%;" data-node="ir2">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">IR2</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">IR sensor 2 (mid-left sector)</div>
+                                            <span class="tooltip-chip" id="tt-chip-ir2">CLEAR</span>
+                                        </div>
+                                        <div class="tooltip-pins">Digital in: GPIO 26 (active low)</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Status</span><span class="tt-v" id="tt-val-ir2">CLEAR</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Stall timer</span><span class="tt-v" id="tt-val-ir2-stall">0.0s / 6.0s</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">LED cluster</span><span class="tt-v">LEDs 10..14 / 40..44</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Mid-way occupancy detector. Works with IR1 and IR3 for multi-sensor congestion queues.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 5. DHT11 Sensor -->
+                                <div class="aerial-hotspot" id="hotspot-dht" style="left: 42%; top: 35%;" data-node="dht">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">DHT</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">DHT11 environmental sensor</div>
+                                            <span class="tooltip-chip" id="tt-chip-dht">NOMINAL</span>
+                                        </div>
+                                        <div class="tooltip-pins">Single-wire: GPIO 13</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Temperature</span><span class="tt-v" id="tt-val-dht-temp">-- °C</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Humidity</span><span class="tt-v" id="tt-val-dht-hum">-- %</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Heat threshold</span><span class="tt-v">&gt; 30.0 °C</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Tracks pavement temperature and humidity. High heat reduces the speed limit to 35 km/h.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 6. Sound / Acoustic Sensor -->
+                                <div class="aerial-hotspot" id="hotspot-sound" style="left: 48%; top: 35%;" data-node="sound">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">MIC</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">Acoustic sound / crash sensor</div>
+                                            <span class="tooltip-chip" id="tt-chip-sound">QUIET</span>
+                                        </div>
+                                        <div class="tooltip-pins">Digital out: GPIO 32 (active high)</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Acoustic level</span><span class="tt-v" id="tt-val-sound">NORMAL</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Collision state</span><span class="tt-v" id="tt-val-collision">CLEAR</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Alert LED response</span><span class="tt-v">LEDs 10..13 solid red</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Monitors high-decibel acoustic shocks that indicate collisions and structural impacts.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 7. IR3 Sensor -->
+                                <div class="aerial-hotspot" id="hotspot-ir3" style="left: 54%; top: 36%;" data-node="ir3">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">IR3</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">IR sensor 3 (mid-right sector)</div>
+                                            <span class="tooltip-chip" id="tt-chip-ir3">CLEAR</span>
+                                        </div>
+                                        <div class="tooltip-pins">Digital in: GPIO 27 (active low)</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Status</span><span class="tt-v" id="tt-val-ir3">CLEAR</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Wrong-way gate</span><span class="tt-v" id="tt-val-ir3-ww">ARMED</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">LED cluster</span><span class="tt-v">LEDs 17..21 / 47..51</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Second node in wrong-way verification. If IR4 fired within the last 15 seconds, this triggers the wrong-way alarm.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 8. Moisture Sensor -->
+                                <div class="aerial-hotspot" id="hotspot-moist" style="left: 61%; top: 33%;" data-node="moist">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">H2O</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">Surface moisture / rain sensor</div>
+                                            <span class="tooltip-chip" id="tt-chip-moist">DRY</span>
+                                        </div>
+                                        <div class="tooltip-pins">Analog in: GPIO 35 (ADC1_CH7)</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Raw reading</span><span class="tt-v" id="tt-val-moist">--</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Threshold</span><span class="tt-v">&lt; 2000 (WET)</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Speed cap</span><span class="tt-v">40 km/h on wet</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Measures pavement conductivity. Low ADC values trigger wet-road LED pulses and speed limit drops.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 9. IR4 Sensor -->
+                                <div class="aerial-hotspot" id="hotspot-ir4" style="left: 80%; top: 34%;" data-node="ir4">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">IR4</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">IR sensor 4 (exit / reverse gate)</div>
+                                            <span class="tooltip-chip" id="tt-chip-ir4">CLEAR</span>
+                                        </div>
+                                        <div class="tooltip-pins">Digital in: GPIO 33 (active low)</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Status</span><span class="tt-v" id="tt-val-ir4">CLEAR</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Wrong-way prime</span><span class="tt-v" id="tt-val-ir4-ww">IDLE</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">LED cluster</span><span class="tt-v">LEDs 24..28 / 54..58</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Corridor exit sensor. Vehicles moving against traffic trip IR4 first, arming a 15-second window for IR3.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 10. US2 Ultrasonic -->
+                                <div class="aerial-hotspot" id="hotspot-us2" style="left: 85%; top: 88%;" data-node="us2">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">US2</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">Ultrasonic US2 (speed exit)</div>
+                                            <span class="tooltip-chip" id="tt-chip-us2">IDLE</span>
+                                        </div>
+                                        <div class="tooltip-pins">TRIG: GPIO 14 | ECHO: GPIO 36</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Beam gate</span><span class="tt-v" id="tt-val-us2">CLEAR (&gt;15cm)</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Measured speed</span><span class="tt-v" id="tt-val-measured-spd">-- km/h</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Evaluation</span><span class="tt-v" id="tt-val-speed-eval">NORMAL</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Stop gate for the speed calculation. Computes the time delta across the 0.30 m test corridor.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 11. WS2812B LED Strip -->
+                                <div class="aerial-hotspot" id="hotspot-leds" style="left: 49%; top: 58%;" data-node="leds">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">LED</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">WS2812B 60x smart roadway LEDs</div>
+                                            <span class="tooltip-chip" id="tt-chip-leds">ACTIVE</span>
+                                        </div>
+                                        <div class="tooltip-pins">Data line: GPIO 2 (60 pixels GRB 800kHz)</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Active pattern</span><span class="tt-v" id="tt-val-led-pattern">NORMAL (AMBER)</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Roadway mapping</span><span class="tt-v">Swapped halves (0..29 / 30..59)</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Stalled localized</span><span class="tt-v" id="tt-val-led-stalled-target">STANDBY</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Dual roadside lighting strip: normal amber, collision red, localized stall flashing and wet-road pulses.</div>
+                                    </div>
+                                </div>
+
+                                <!-- 12. ESP32 Core Controller -->
+                                <div class="aerial-hotspot" id="hotspot-esp32" style="left: 38%; top: 88%;" data-node="esp32">
+                                    <span class="hotspot-pin"><span class="hotspot-pulse"></span><span class="hotspot-core">MCU</span></span>
+                                    <div class="hotspot-tooltip">
+                                        <div class="tooltip-header">
+                                            <div class="tooltip-title">ESP32 core microcontroller</div>
+                                            <span class="tooltip-chip" id="tt-chip-esp32">CONNECTED</span>
+                                        </div>
+                                        <div class="tooltip-pins">ESP-WROOM-32 (dual core 240MHz)</div>
+                                        <div class="tooltip-data">
+                                            <div class="tooltip-row"><span class="tt-k">Bluetooth BLE</span><span class="tt-v">SENTRAX-ESP32</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">UART bridge</span><span class="tt-v">115200 baud</span></div>
+                                            <div class="tooltip-row"><span class="tt-k">Core loop rate</span><span class="tt-v">50 Hz telemetry</span></div>
+                                        </div>
+                                        <div class="tooltip-desc">Orchestrates sensor interrupts, risk computation, LED logic and BLE / serial telemetry broadcast.</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="nav-metric-body">
-                                <div class="nav-metric-tag">Road Anatomy</div>
-                                <div class="nav-anatomy-desc" id="nav-road-anatomy-val">Surface: Asphalt | Lanes: 2 | Shoulder: Concrete</div>
-                            </div>
                         </div>
 
-                        <!-- Card 3: Live Sensor Speed & Safe Limit Strip -->
-                        <div class="nav-live-strip">
-                            <div>
-                                <span style="color:#71717a; font-size:10px; font-weight:600; text-transform:uppercase;">Vehicle Speed</span>
-                                <div class="nav-speed-display">
-                                    <span class="nav-speed-curr" id="nav-current-speed">0.0</span>
-                                    <span style="font-size:10px; color:#94a3b8;">km/h</span>
-                                </div>
-                            </div>
-                            <div style="text-align:right;">
-                                <span style="color:#71717a; font-size:10px; font-weight:600; text-transform:uppercase;">Dynamic Safe Limit</span>
+                        <div class="aerial-legend-bar">
+                            <div class="legend-item"><span class="legend-dot green"></span>Clear / nominal</div>
+                            <div class="legend-item"><span class="legend-dot red"></span>Triggered / alert active</div>
+                            <div class="legend-item"><span class="legend-dot amber"></span>Caution / warning</div>
+                            <div class="legend-item"><span class="legend-dot cyan"></span>Environmental reading</div>
+                            <div class="legend-item"><span class="legend-dot gray"></span>Standby / awaiting hardware</div>
+                        </div>
+                    </section>
+
+                    <div class="aerial-sidebar-column">
+                        <!-- E-Ink Display Digital Twin -->
+                        <section class="card eink-twin-card">
+                            <div class="card-head">
                                 <div>
-                                    <span class="nav-speed-rec-badge" id="nav-speed-rec-badge">LIMIT: 80 km/h</span>
+                                    <h2 class="card-title">Live 1.54" E-Ink display</h2>
+                                    <p class="card-sub">Digital twin of the overhead gantry sign</p>
+                                </div>
+                                <span class="eink-tech-pill">200x200 BW</span>
+                            </div>
+
+                            <div class="eink-display-bezel">
+                                <div class="eink-screen-surface" id="eink-screen-surface">
+                                    <div class="eink-header-strip">
+                                        <span class="eink-hdr-left">SENTRAX VSL SIGN</span>
+                                        <span class="eink-hdr-right" id="eink-refresh-indicator">LIVE</span>
+                                    </div>
+                                    <div class="eink-body-content">
+                                        <div class="eink-speed-sign-ring">
+                                            <div class="eink-speed-number" id="eink-speed-val">80</div>
+                                            <div class="eink-speed-kmh">km/h</div>
+                                        </div>
+                                        <div class="eink-alert-box" id="eink-alert-box">
+                                            <div class="eink-alert-icon" id="eink-alert-icon"><i class="ph-bold ph-check-circle"></i></div>
+                                            <div class="eink-alert-main" id="eink-alert-main">ROAD CLEAR</div>
+                                            <div class="eink-alert-sub" id="eink-alert-sub">NORMAL LIMIT: 80 KM/H</div>
+                                        </div>
+                                    </div>
+                                    <div class="eink-footer-strip">
+                                        <span>MEASURED: <b id="eink-measured-spd">0.0</b> km/h</span>
+                                        <span>STATUS: <b id="eink-status-label">NORMAL</b></span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- iPhone Home Bar -->
-                        <div class="iphone-home-bar"></div>
+                            <div class="eink-meta-footer">
+                                <div>Driver <b>GxEPD2_154_D67</b></div>
+                                <div>Wiring <b>CS 16, DC 17, RST 21, BUSY 22</b></div>
+                            </div>
+                        </section>
+
+                        <!-- Manual Controls & Alert Injection -->
+                        <section class="card manual-controls-card">
+                            <div class="card-head">
+                                <div>
+                                    <h2 class="card-title">Hardware command console</h2>
+                                    <p class="card-sub">Two-way sync with the ESP32, LEDs and E-Ink</p>
+                                </div>
+                                <button class="btn btn-ghost btn-sm" id="btn-reset-demo" type="button" title="Clear every demo alert and test speed applied from this console">
+                                    <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>Reset demo
+                                </button>
+                            </div>
+
+                            <div class="ctrl-subpanel">
+                                <div class="ctrl-subpanel-title">
+                                    <span>Test vehicle speed</span>
+                                    <span class="ctrl-speed-display"><span id="ctrl-slider-val">80</span> km/h</span>
+                                </div>
+                                <div class="ctrl-slider-row">
+                                    <input type="range" min="20" max="120" step="5" value="80" class="ctrl-slider" id="input-speed-slider" aria-label="Test vehicle speed in km/h">
+                                </div>
+                                <div class="ctrl-presets-row">
+                                    <button class="btn-preset" data-speed="35"><b>35</b>High temp</button>
+                                    <button class="btn-preset" data-speed="40"><b>40</b>Wet road</button>
+                                    <button class="btn-preset" data-speed="60"><b>60</b>Congestion</button>
+                                    <button class="btn-preset" data-speed="70"><b>70</b>Moderate</button>
+                                    <button class="btn-preset active" data-speed="80"><b>80</b>Normal</button>
+                                </div>
+                                <button class="btn btn-primary btn-block" id="btn-apply-speed">
+                                    <i class="ph-bold ph-broadcast" aria-hidden="true"></i>Send test speed to ESP32
+                                </button>
+                            </div>
+
+                            <div class="ctrl-subpanel">
+                                <div class="ctrl-subpanel-title">
+                                    <span>Trigger safety alerts and LED scenarios</span>
+                                </div>
+                                <div class="ctrl-stalled-select-row">
+                                    <label for="select-stalled-ir">Stalled vehicle IR node</label>
+                                    <select id="select-stalled-ir" class="ctrl-select">
+                                        <option value="0">IR1 (entrance, LEDs 2..6)</option>
+                                        <option value="1" selected>IR2 (mid-left, LEDs 10..14)</option>
+                                        <option value="2">IR3 (mid-right, LEDs 17..21)</option>
+                                        <option value="3">IR4 (corridor exit, LEDs 24..28)</option>
+                                    </select>
+                                </div>
+
+                                <div class="alert-buttons-grid">
+                                    <button class="btn-alert-cmd danger" data-alert="COLLISION">
+                                        <i class="ph-bold ph-warning-octagon cmd-icon" aria-hidden="true"></i>
+                                        <span class="cmd-text"><b>Collision</b><small>Acoustic crash</small></span>
+                                    </button>
+                                    <button class="btn-alert-cmd danger" data-alert="WRONG_WAY">
+                                        <i class="ph-bold ph-prohibit cmd-icon" aria-hidden="true"></i>
+                                        <span class="cmd-text"><b>Wrong way</b><small>Reverse direction</small></span>
+                                    </button>
+                                    <button class="btn-alert-cmd warning" data-alert="STALLED">
+                                        <i class="ph-bold ph-traffic-cone cmd-icon" aria-hidden="true"></i>
+                                        <span class="cmd-text"><b>Stalled car</b><small>Local IR flashing</small></span>
+                                    </button>
+                                    <button class="btn-alert-cmd warning" data-alert="CONGESTION">
+                                        <i class="ph-bold ph-car-profile cmd-icon" aria-hidden="true"></i>
+                                        <span class="cmd-text"><b>Congestion</b><small>High density</small></span>
+                                    </button>
+                                    <button class="btn-alert-cmd info" data-alert="WET_ROAD">
+                                        <i class="ph-bold ph-cloud-rain cmd-icon" aria-hidden="true"></i>
+                                        <span class="cmd-text"><b>Wet road</b><small>Rain / slick surface</small></span>
+                                    </button>
+                                    <button class="btn-alert-cmd info" data-alert="HIGH_TEMP">
+                                        <i class="ph-bold ph-sun cmd-icon" aria-hidden="true"></i>
+                                        <span class="cmd-text"><b>High temp</b><small>Pavement overheat</small></span>
+                                    </button>
+                                    <button class="btn-alert-cmd purple" data-alert="EMERGENCY">
+                                        <i class="ph-bold ph-siren cmd-icon" aria-hidden="true"></i>
+                                        <span class="cmd-text"><b>Emergency</b><small>RFID priority yield</small></span>
+                                    </button>
+                                    <button class="btn-alert-cmd success" data-alert="NORMAL">
+                                        <i class="ph-bold ph-check-circle cmd-icon" aria-hidden="true"></i>
+                                        <span class="cmd-text"><b>Clear / normal</b><small>Standard baseline</small></span>
+                                    </button>
+                                </div>
+
+                                <div class="ctrl-feedback-banner" id="ctrl-feedback-banner" role="status">
+                                    Ready to transmit commands to physical hardware.
+                                </div>
+                            </div>
+                        </section>
                     </div>
                 </div>
+            </div>
 
-                <!-- Side Route Setup & Google Maps Configuration Panel -->
-                <div class="nav-console-panel">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
-                        <div>
-                            <h3 style="font-size:16px; font-weight:700; color:var(--text-primary); margin:0;">Route Corridor & Map Configuration</h3>
-                            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Select start and destination points along the smart sensor road.</div>
+            <!-- ====================================================== -->
+            <!-- 4. ROAD INTELLIGENCE (risk, analytics, vision, health, -->
+            <!--    hardware nodes)                                     -->
+            <!-- ====================================================== -->
+            <div class="page-container" id="page-intelligence" data-title="Road Intelligence" data-sub="Risk, analytics, vision, road health and hardware nodes">
+                <nav class="subnav" id="intel-subnav" aria-label="Road Intelligence sections">
+                    <a href="#intel-risk" class="subnav-link active"><i class="ph ph-warning" aria-hidden="true"></i>Risk</a>
+                    <a href="#intel-analytics" class="subnav-link"><i class="ph ph-chart-line-up" aria-hidden="true"></i>Analytics</a>
+                    <a href="#intel-vision" class="subnav-link"><i class="ph ph-video-camera" aria-hidden="true"></i>Vision</a>
+                    <a href="#intel-health" class="subnav-link"><i class="ph ph-road-horizon" aria-hidden="true"></i>Road health</a>
+                    <a href="#intel-hardware" class="subnav-link"><i class="ph ph-cpu" aria-hidden="true"></i>Hardware nodes</a>
+                </nav>
+
+                <!-- Risk -->
+                <section class="intel-section" id="intel-risk">
+                    <header class="section-head">
+                        <h2>Road risk</h2>
+                        <p>How the 0-100 composite score moves, and what it is made of.</p>
+                    </header>
+                    <div class="grid-12">
+                        <div class="card span-7">
+                            <div class="card-head">
+                                <h3 class="card-title">Risk trend</h3>
+                                <span class="card-meta">Last 15 samples</span>
+                            </div>
+                            <div class="chart-box">
+                                <canvas id="chart-risk-trend"></canvas>
+                            </div>
                         </div>
-                        <button class="btn btn-outline btn-sm" id="btn-toggle-expanded-view" style="font-size:11px;">
-                            Toggle Cockpit View
-                        </button>
+                        <div class="card span-5">
+                            <div class="card-head">
+                                <h3 class="card-title">Scoring weights</h3>
+                                <span class="card-meta">Prototype model</span>
+                            </div>
+                            <ul class="weights-list">
+                                <li><span>Collision detected</span><b class="w-crit">+50</b></li>
+                                <li><span>Wrong-way vehicle entry</span><b class="w-crit">+40</b></li>
+                                <li><span>Stalled vehicle on corridor</span><b class="w-warn">+25</b></li>
+                                <li><span>Overspeed (&gt; 4.0 km/h demo)</span><b class="w-warn">+20</b></li>
+                                <li><span>Potholes ahead, each (max 30)</span><b class="w-warn">+15</b></li>
+                                <li><span>Wet surface (&lt; 2000 moisture)</span><b class="w-info">+15</b></li>
+                                <li><span>Congestion (5 s or more)</span><b class="w-info">+10</b></li>
+                                <li><span>High temperature or humidity</span><b class="w-info">+5</b></li>
+                            </ul>
+                        </div>
                     </div>
+                </section>
 
-                    <!-- Location 1: Origin -->
-                    <div class="nav-field-group">
-                        <label class="nav-field-label">ORIGIN (START POINT)</label>
-                        <div class="nav-input-wrap">
-                            <svg class="nav-input-icon" fill="none" stroke="#10b981" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="2.5" fill="#10b981"/></svg>
-                            <input type="text" class="nav-input" id="nav-input-origin" value="Woxsen North Roundabout" placeholder="e.g. Woxsen North Roundabout">
+                <!-- Analytics -->
+                <section class="intel-section" id="intel-analytics">
+                    <header class="section-head">
+                        <h2>Analytics and trends</h2>
+                        <p>Aggregated across every live session recorded on this system.</p>
+                    </header>
+                    <div class="card metric-strip">
+                        <div class="metric-cell">
+                            <div class="metric-label">Total corridor incidents</div>
+                            <div class="metric-value" id="an-total">--</div>
+                            <div class="metric-note">All sessions</div>
+                        </div>
+                        <div class="metric-cell">
+                            <div class="metric-label">Average toy-car speed</div>
+                            <div class="metric-value" id="an-speed">--</div>
+                            <div class="metric-note">Ultrasonic readings</div>
+                        </div>
+                        <div class="metric-cell">
+                            <div class="metric-label">Road health</div>
+                            <div class="metric-value" id="an-health">--</div>
+                            <div class="metric-note" id="an-health-band">Prototype score</div>
                         </div>
                     </div>
-
-                    <!-- Swap & Presets Row -->
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin:-8px 0 12px 0;">
-                        <button class="btn btn-outline btn-sm" id="btn-swap-locations" style="padding:4px 10px; font-size:11px;">
-                            ⇅ Swap Start & Destination
-                        </button>
-                        <span style="font-size:11px; color:var(--accent-cyan);" id="nav-route-dist-eta">1.8 km | 4.5 mins</span>
-                    </div>
-
-                    <!-- Location 2: Destination -->
-                    <div class="nav-field-group">
-                        <label class="nav-field-label">DESTINATION (END POINT)</label>
-                        <div class="nav-input-wrap">
-                            <svg class="nav-input-icon" fill="none" stroke="#ef4444" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
-                            <input type="text" class="nav-input" id="nav-input-dest" value="Woxsen Hostels & Blue Embers" placeholder="e.g. Woxsen Hostels & Blue Embers">
+                    <div class="card">
+                        <div class="card-head">
+                            <h3 class="card-title">Incidents by type</h3>
+                            <span class="card-meta" id="an-updated">Loading</span>
+                        </div>
+                        <div class="type-bars" id="an-by-type">
+                            <div class="empty-inline">No incidents recorded yet. Counts appear here as the corridor logs events.</div>
                         </div>
                     </div>
+                </section>
 
-                    <!-- Presets -->
-                    <div class="nav-field-group">
-                        <label class="nav-field-label">QUICK ROUTE PRESETS</label>
-                        <div class="nav-preset-pills">
-                            <span class="nav-preset-pill active" data-preset="woxsen-campus">Woxsen Campus Loop (Image Exact)</span>
-                            <span class="nav-preset-pill" data-preset="woxsen-gate">Main Gate → Academic Block</span>
-                            <span class="nav-preset-pill" data-preset="corridor-test">Sensor Track (US1 → IR4)</span>
+                <!-- Computer Vision -->
+                <section class="intel-section" id="intel-vision">
+                    <header class="section-head">
+                        <h2>Computer vision</h2>
+                        <p>Phone camera perception: tracked objects and surface defects.</p>
+                    </header>
+                    <div class="grid-12">
+                        <div class="card span-8 cv-card">
+                            <div class="cv-monitor-box">
+                                <img id="cv-feed" data-src="/api/cv/feed" alt="SentraX computer vision camera feed">
+                                <div class="cv-hud-overlay"><span class="rec-dot"></span>Detector active</div>
+                                <div class="cv-hud-res mono">640x360 MJPEG</div>
+                            </div>
+                        </div>
+                        <div class="card span-4">
+                            <div class="card-head">
+                                <h3 class="card-title">Tracked objects</h3>
+                                <span class="card-meta">Live</span>
+                            </div>
+                            <div class="cv-stats">
+                                <div><span class="cv-stat-value" id="cv-vehicles">0</span><span class="cv-stat-label">Vehicles</span></div>
+                                <div><span class="cv-stat-value" id="cv-potholes">0</span><span class="cv-stat-label">Potholes</span></div>
+                                <div><span class="cv-stat-value" id="cv-stopped">0</span><span class="cv-stat-label">Stopped</span></div>
+                                <div><span class="cv-stat-value" id="cv-wrongway">0</span><span class="cv-stat-label">Wrong-way</span></div>
+                            </div>
+                            <dl class="kv-list compact">
+                                <div class="kv-row"><dt>Perception model</dt><dd>Multi-class motion and contour</dd></div>
+                                <div class="kv-row"><dt>Speed estimation</dt><dd class="text-warn">Estimated (uncalibrated)</dd></div>
+                                <div class="kv-row"><dt>Target classes</dt><dd>Car, bike, truck, bus, pedestrian, pothole</dd></div>
+                            </dl>
                         </div>
                     </div>
+                </section>
 
-                    <!-- Update Route Button -->
-                    <button class="btn btn-primary" id="btn-recompute-route" style="width:100%; margin-bottom:18px;">
-                        Update Route & Recalculate Sensor Metrics
-                    </button>
+                <!-- Road Health -->
+                <section class="intel-section" id="intel-health">
+                    <header class="section-head">
+                        <h2>Road health</h2>
+                        <p>Prototype metric, not an official government rating.</p>
+                    </header>
+                    <div class="grid-12">
+                        <div class="card span-5 health-score-card">
+                            <div class="health-score">
+                                <span class="health-value" id="rh-score">--</span>
+                                <span class="health-max">/100</span>
+                            </div>
+                            <span class="chip chip-muted" id="rh-band">Loading</span>
+                            <ul class="factor-list compact" id="rh-factors"></ul>
+                        </div>
+                        <div class="card span-7">
+                            <div class="card-head">
+                                <h3 class="card-title">Health bands</h3>
+                            </div>
+                            <ul class="band-list">
+                                <li class="band good"><b>85-100</b><span>Good</span><em>Pristine asphalt, clear markings</em></li>
+                                <li class="band moderate"><b>65-84</b><span>Moderate</span><em>Minor wear, light traffic wear</em></li>
+                                <li class="band poor"><b>40-64</b><span>Poor</span><em>Pothole clusters, wet sections</em></li>
+                                <li class="band critical"><b>0-39</b><span>Critical</span><em>Severe damage, frequent crashes</em></li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
 
-                    <!-- Google Maps Platform Status & API Key Integration -->
-                    <div style="background:var(--bg-dark); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:14px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <span style="font-size:12px; font-weight:700; color:var(--text-primary);">Google Maps Platform Integration</span>
-                            <span class="badge" id="nav-gmaps-badge" style="background:rgba(56,189,248,0.15); color:var(--accent-cyan); border:1px solid rgba(56,189,248,0.3);">Maps JS & Routes API</span>
+                <!-- Hardware Nodes -->
+                <section class="intel-section" id="intel-hardware">
+                    <header class="section-head">
+                        <h2>Hardware and BLE nodes</h2>
+                        <p>Registered microcontrollers and their last known link state.</p>
+                    </header>
+                    <div class="device-grid" id="device-cards-container"></div>
+                </section>
+            </div>
+
+            <!-- ====================================================== -->
+            <!-- 5. MAP / NAVIGATION (IN-CAR SCREEN REPLICA)                      -->
+            <!-- ====================================================== -->
+            <div class="page-container" id="page-navigation" data-title="Google Maps In-Car Navigation">
+                <div class="nav-screen-layout" id="nav-layout-wrapper">
+                
+                    <!-- iPhone 16 Pro Device Frame (Exact visual replica of uploaded image) -->
+                    <div class="iphone-frame" id="nav-iphone-frame">
+                    
+                        <!-- Dynamic Island Notch -->
+                        <div class="dynamic-island">
+                            <div class="dynamic-island-camera"></div>
+                            <div class="dynamic-island-sensor"></div>
                         </div>
-                        <div style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:10px;">
-                            Connects directly to the Google Maps JavaScript API and Routes API for photorealistic map tiles, satellite hybrid layers, and traffic services. Use your Google Cloud API key or a free Maps Demo Key for prototyping.
+
+                        <!-- iOS Top Status Bar -->
+                        <div class="iphone-status-bar">
+                            <span class="iphone-time" id="nav-live-clock">6:22</span>
+                            <div class="iphone-status-icons">
+                                <!-- Cellular Signal -->
+                                <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.57 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <!-- Wi-Fi -->
+                                <svg viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4zm0 3.5c3.67 0 7.02 1.39 9.58 3.68L12 18.25 2.42 11.18C4.98 8.89 8.33 7.5 12 7.5z"/></svg>
+                                <!-- Battery with Lightning Bolt -->
+                                <svg viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4zM11 20v-5.5H9L13 7v5.5h2L11 20z"/></svg>
+                            </div>
                         </div>
-                        <div style="display:flex; gap:8px;">
-                            <input type="password" class="nav-input" id="nav-gmaps-key-input" placeholder="Paste Google Maps API Key here..." style="font-size:12px; padding-left:12px;">
-                            <button class="btn btn-outline btn-sm" id="btn-save-gmaps-key" style="white-space:nowrap;">
-                                Save Key
+
+                        <!-- Weather Pill Widget (Left) -->
+                        <div class="weather-pill">
+                            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+                            <span class="weather-pill-temp"><span id="nav-weather-temp">26</span>°</span>
+                            <div class="weather-pill-divider"></div>
+                            <div class="weather-pill-aqi">
+                                <span>AQI <span id="nav-weather-aqi">72</span></span>
+                                <div class="aqi-dot"></div>
+                            </div>
+                        </div>
+
+                        <!-- Map Viewport Container -->
+                        <div id="sentrax-nav-map" class="nav-phone-map"></div>
+
+                        <!-- Floating Action Buttons on the Right (Layers, Navigation Mode, Compass) -->
+                        <div class="nav-floating-actions">
+                            <button class="nav-float-btn" id="btn-map-layers" title="Toggle Map Layer (Dark / Satellite)">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                            </button>
+                            <button class="nav-float-btn" id="btn-map-car" title="Center Navigation Vehicle">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 17h.01M16 17h.01M4 11l2-6h12l2 6M4 11h16M4 11v6a1 1 0 001 1h1m14-7v6a1 1 0 01-1 1h-1"/></svg>
+                            </button>
+                            <button class="nav-float-btn" id="btn-map-compass" title="Fit Entire Route">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                             </button>
                         </div>
-                        <div style="margin-top:6px; font-size:10px; color:#71717a;" id="nav-gmaps-key-status">
-                            Interactive navigation mode active with dark vector styling.
+
+                        <!-- Directions & Live Route Metrics Bottom Sheet (Exact replica) -->
+                        <div class="nav-bottom-drawer" id="nav-bottom-drawer">
+                            <!-- Top Drag Handle -->
+                            <div class="nav-drawer-drag-handle" id="nav-drawer-toggle"></div>
+
+                            <!-- Header -->
+                            <div class="nav-drawer-header">
+                                <div class="nav-drawer-title">Directions</div>
+                                <button class="nav-drawer-close" id="btn-close-directions" title="Collapse / Expand Drawer">
+                                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+
+                            <!-- Subtitle -->
+                            <div class="nav-drawer-subtitle">Live Route Metrics</div>
+
+                            <!-- Card 1: Road Health -->
+                            <div class="nav-metric-box">
+                                <div class="nav-metric-icon-wrap">
+                                    <!-- Road Perspective Icon -->
+                                    <svg class="road-icon-graphic" viewBox="0 0 32 32" fill="none">
+                                        <path d="M9 28L13 4H19L23 28H9Z" fill="#2B303C"/>
+                                        <path d="M8 29L12.5 3H19.5L24 29" stroke="#71717A" stroke-width="2" stroke-linecap="round"/>
+                                        <line x1="16" y1="5" x2="16" y2="10" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="2 2"/>
+                                        <line x1="16" y1="14" x2="16" y2="20" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="2 2"/>
+                                        <line x1="16" y1="24" x2="16" y2="28" stroke="#FFFFFF" stroke-width="2"/>
+                                    </svg>
+                                </div>
+                                <div class="nav-metric-body">
+                                    <div class="nav-metric-tag">Road Health</div>
+                                    <div class="nav-metric-headline">
+                                        <span id="nav-road-health-val">68% (Fair)</span>
+                                    </div>
+                                    <div class="nav-health-track">
+                                        <div class="nav-health-fill" id="nav-road-health-bar" style="width: 68%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Road Anatomy -->
+                            <div class="nav-metric-box">
+                                <div class="nav-metric-icon-wrap">
+                                    <!-- Speed Limit Sign with Verified Shield -->
+                                    <div class="speed-sign-graphic">
+                                        <span class="sign-title">LIMIT</span>
+                                        <span class="sign-val" id="nav-sign-limit-val">30</span>
+                                        <div class="speed-sign-shield">
+                                            <svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="nav-metric-body">
+                                    <div class="nav-metric-tag">Road Anatomy</div>
+                                    <div class="nav-anatomy-desc" id="nav-road-anatomy-val">Surface: Asphalt | Lanes: 2 | Shoulder: Concrete</div>
+                                </div>
+                            </div>
+
+                            <!-- Card 3: Live Sensor Speed & Safe Limit Strip -->
+                            <div class="nav-live-strip">
+                                <div>
+                                    <span style="color:#71717a; font-size:10px; font-weight:600; text-transform:uppercase;">Vehicle Speed</span>
+                                    <div class="nav-speed-display">
+                                        <span class="nav-speed-curr" id="nav-current-speed">0.0</span>
+                                        <span style="font-size:10px; color:#94a3b8;">km/h</span>
+                                    </div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <span style="color:#71717a; font-size:10px; font-weight:600; text-transform:uppercase;">Dynamic Safe Limit</span>
+                                    <div>
+                                        <span class="nav-speed-rec-badge" id="nav-speed-rec-badge">LIMIT: 80 km/h</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- iPhone Home Bar -->
+                            <div class="iphone-home-bar"></div>
                         </div>
                     </div>
 
-                    <!-- Live Hardware Sensor Link Information -->
-                    <div style="margin-top:14px; padding:12px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:var(--radius-md); font-size:11px; line-height:1.6;">
-                        <div style="font-weight:700; color:var(--accent-emerald); margin-bottom:4px;">
-                            Physical Hardware Sensor Feedback Active
+                    <!-- Side Route Setup & Google Maps Configuration Panel -->
+                    <div class="nav-console-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+                            <div>
+                                <h3 style="font-size:16px; font-weight:700; color:var(--text-primary); margin:0;">Route Corridor & Map Configuration</h3>
+                                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Select start and destination points along the smart sensor road.</div>
+                            </div>
+                            <button class="btn btn-outline btn-sm" id="btn-toggle-expanded-view" style="font-size:11px;">
+                                Toggle Cockpit View
+                            </button>
                         </div>
-                        <div style="color:var(--text-muted);" id="nav-sensor-explanation">
-                            The Road Health score (68% Fair), Road Anatomy, and Speed Limits dynamically adapt in real time to the live ESP32 sensors (moisture, IR grid, ultrasonic speed, sound/collision).
+
+                        <!-- Location 1: Origin -->
+                        <div class="nav-field-group">
+                            <label class="nav-field-label">ORIGIN (START POINT)</label>
+                            <div class="nav-input-wrap">
+                                <svg class="nav-input-icon" fill="none" stroke="#10b981" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="2.5" fill="#10b981"/></svg>
+                                <input type="text" class="nav-input" id="nav-input-origin" value="Woxsen North Roundabout" placeholder="e.g. Woxsen North Roundabout">
+                            </div>
                         </div>
+
+                        <!-- Swap & Presets Row -->
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin:-8px 0 12px 0;">
+                            <button class="btn btn-outline btn-sm" id="btn-swap-locations" style="padding:4px 10px; font-size:11px;">
+                                ⇅ Swap Start & Destination
+                            </button>
+                            <span style="font-size:11px; color:var(--accent-cyan);" id="nav-route-dist-eta">1.8 km | 4.5 mins</span>
+                        </div>
+
+                        <!-- Location 2: Destination -->
+                        <div class="nav-field-group">
+                            <label class="nav-field-label">DESTINATION (END POINT)</label>
+                            <div class="nav-input-wrap">
+                                <svg class="nav-input-icon" fill="none" stroke="#ef4444" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
+                                <input type="text" class="nav-input" id="nav-input-dest" value="Woxsen Hostels & Blue Embers" placeholder="e.g. Woxsen Hostels & Blue Embers">
+                            </div>
+                        </div>
+
+                        <!-- Presets -->
+                        <div class="nav-field-group">
+                            <label class="nav-field-label">QUICK ROUTE PRESETS</label>
+                            <div class="nav-preset-pills">
+                                <span class="nav-preset-pill active" data-preset="woxsen-campus">Woxsen Campus Loop (Image Exact)</span>
+                                <span class="nav-preset-pill" data-preset="woxsen-gate">Main Gate → Academic Block</span>
+                                <span class="nav-preset-pill" data-preset="corridor-test">Sensor Track (US1 → IR4)</span>
+                            </div>
+                        </div>
+
+                        <!-- Update Route Button -->
+                        <button class="btn btn-primary" id="btn-recompute-route" style="width:100%; margin-bottom:18px;">
+                            Update Route & Recalculate Sensor Metrics
+                        </button>
+
+                        <!-- Google Maps Platform Status & API Key Integration -->
+                        <div style="background:var(--bg-dark); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:14px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <span style="font-size:12px; font-weight:700; color:var(--text-primary);">Google Maps Platform Integration</span>
+                                <span class="badge" id="nav-gmaps-badge" style="background:rgba(56,189,248,0.15); color:var(--accent-cyan); border:1px solid rgba(56,189,248,0.3);">Maps JS & Routes API</span>
+                            </div>
+                            <div style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:10px;">
+                                Connects directly to the Google Maps JavaScript API and Routes API for photorealistic map tiles, satellite hybrid layers, and traffic services. Use your Google Cloud API key or a free Maps Demo Key for prototyping.
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <input type="password" class="nav-input" id="nav-gmaps-key-input" placeholder="Paste Google Maps API Key here..." style="font-size:12px; padding-left:12px;">
+                                <button class="btn btn-outline btn-sm" id="btn-save-gmaps-key" style="white-space:nowrap;">
+                                    Save Key
+                                </button>
+                            </div>
+                            <div style="margin-top:6px; font-size:10px; color:#71717a;" id="nav-gmaps-key-status">
+                                Interactive navigation mode active with dark vector styling.
+                            </div>
+                        </div>
+
+                        <!-- Live Hardware Sensor Link Information -->
+                        <div style="margin-top:14px; padding:12px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:var(--radius-md); font-size:11px; line-height:1.6;">
+                            <div style="font-weight:700; color:var(--accent-emerald); margin-bottom:4px;">
+                                Physical Hardware Sensor Feedback Active
+                            </div>
+                            <div style="color:var(--text-muted);" id="nav-sensor-explanation">
+                                The Road Health score (68% Fair), Road Anatomy, and Speed Limits dynamically adapt in real time to the live ESP32 sensors (moisture, IR grid, ultrasonic speed, sound/collision).
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ====================================================== -->
+            <!-- 6. EVENT HISTORY                                       -->
+            <!-- ====================================================== -->
+            <div class="page-container" id="page-events" data-title="Event History" data-sub="Persistent incident log">
+                <section class="card">
+                    <div class="card-head">
+                        <div class="segmented" id="events-filter" role="group" aria-label="Filter by severity">
+                            <button class="seg active" data-severity="">All</button>
+                            <button class="seg" data-severity="CRITICAL">Critical</button>
+                            <button class="seg" data-severity="WARNING">Warning</button>
+                            <button class="seg" data-severity="INFO">Info</button>
+                        </div>
+                        <button class="btn btn-ghost btn-sm" id="btn-refresh-events" type="button">
+                            <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Refresh
+                        </button>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Event type</th>
+                                    <th>Severity</th>
+                                    <th>Source</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="events-table-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ====================================================== -->
+            <!-- 7. SETTINGS                                            -->
+            <!-- ====================================================== -->
+            <div class="page-container" id="page-settings" data-title="Settings" data-sub="Prototype hardware and scoring parameters">
+                <div class="settings-grid">
+                    <section class="card">
+                        <div class="card-head"><h2 class="card-title">Detection timing</h2></div>
+                        <dl class="kv-list">
+                            <div class="kv-row"><dt>Congestion continuous trigger</dt><dd><b>5 seconds</b><code>CONGESTION_TIME</code></dd></div>
+                            <div class="kv-row"><dt>Stalled vehicle continuous trigger</dt><dd><b>6 seconds</b><code>STALL_TIME</code></dd></div>
+                            <div class="kv-row"><dt>Wrong-way detection window</dt><dd><b>15 seconds</b><code>WRONG_WAY_WINDOW</code></dd></div>
+                            <div class="kv-row"><dt>ESP8266 RFID cadence</dt><dd><b>5 dual-beep cycles</b><code>RFID_BEEP_COUNT</code></dd></div>
+                        </dl>
+                    </section>
+                    <section class="card">
+                        <div class="card-head"><h2 class="card-title">Speed policy</h2></div>
+                        <dl class="kv-list">
+                            <div class="kv-row"><dt>Toy-car overspeed limit</dt><dd><b>4.0 km/h</b><code>DEMO_OVERSPEED_LIMIT</code></dd></div>
+                            <div class="kv-row"><dt>Normal road recommendation</dt><dd><b>80.0 km/h</b><code>NORMAL_SPEED</code></dd></div>
+                            <div class="kv-row"><dt>Ultrasonic sensor distance</dt><dd><b>0.30 m</b><code>SENSOR_DISTANCE</code></dd></div>
+                        </dl>
+                    </section>
+                    <section class="card">
+                        <div class="card-head"><h2 class="card-title">Ask SentraX copilot</h2></div>
+                        <dl class="kv-list">
+                            <div class="kv-row"><dt>Model</dt><dd><b id="ai-model">--</b></dd></div>
+                            <div class="kv-row"><dt>Reasoning effort</dt><dd><b id="ai-effort">--</b></dd></div>
+                            <div class="kv-row"><dt>API key</dt><dd><span class="chip chip-muted" id="ai-key-state">Checking</span></dd></div>
+                            <div class="kv-row"><dt>Data access</dt><dd><b>Read-only</b></dd></div>
+                        </dl>
+                        <p class="card-note">Set <code>ANTHROPIC_API_KEY</code> in the project's <code>.env</code> file and restart the server to enable the copilot.</p>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================== -->
+        <!-- HARDWARE PAIRING GATE (shown until the ESP32 streams)      -->
+        <!-- ========================================================== -->
+        <section class="hardware-standby-overlay" id="hardware-standby-overlay" aria-labelledby="gate-title">
+            <div class="gate-bg" aria-hidden="true">
+                <img src="/static/images/project_aerial.jpg" alt="">
+                <canvas id="gate-trails"></canvas>
+            </div>
+            <div class="gate">
+                <div class="gate-copy">
+                    <div class="gate-lockup">
+                        <svg class="gate-mark" aria-hidden="true"><use href="#sx-mark"/></svg>
+                        <span class="brand-word brand-word-lg">SENTRA<span>X</span></span>
+                    </div>
+                    <h1 class="gate-title" id="gate-title">
+                        <span class="line"><span>Connect the corridor</span></span>
+                        <span class="line"><span>to go <em>live.</em></span></span>
+                    </h1>
+                    <p class="gate-lede">Pair the ESP32 road controller over Bluetooth or USB to stream live speed, risk and incident data.</p>
+                    <div class="gate-actions">
+                        <button class="btn btn-primary btn-lg" id="btn-open-esp32-modal" type="button">
+                            <i class="ph-bold ph-bluetooth" aria-hidden="true"></i>Pair controller
+                        </button>
+                        <button class="btn btn-glass btn-lg" type="button" data-copilot-open>
+                            <i class="ph ph-sparkle" aria-hidden="true"></i>Ask SentraX
+                        </button>
                     </div>
                 </div>
 
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 9. HAZARD ZONES -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-hazards" data-title="Hazard Zones">
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">Active Hazard Perimeters</span>
-                </div>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Hazard Title</th>
-                            <th>Type</th>
-                            <th>Radius</th>
-                            <th>Severity</th>
-                            <th>Created</th>
-                        </tr>
-                    </thead>
-                    <tbody id="hazards-table-body">
-                        <!-- Populated dynamically -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 10. DEVICE NODES -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-devices" data-title="Hardware & BLE Nodes">
-            <div id="device-cards-container">
-                <!-- Populated dynamically -->
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- 11. SETTINGS & CALIBRATION -->
-        <!-- ========================================== -->
-        <div class="page-container" id="page-settings" data-title="System Settings">
-            <div class="card" style="max-width: 680px;">
-                <div class="card-title">Prototype Hardware & Scoring Parameters</div>
-                <div style="font-size:13px; color:var(--text-secondary); line-height:2.2; margin-top:15px;">
-                    <div>Toy-Car Overspeed Limit: <b>4.0 km/h</b> (DEMO_OVERSPEED_LIMIT)</div>
-                    <div>Normal Road Recommendation: <b>80.0 km/h</b> (NORMAL_SPEED)</div>
-                    <div>Ultrasonic Sensor Distance: <b>0.30 m</b> (SENSOR_DISTANCE)</div>
-                    <div>Congestion Continuous Trigger: <b>5 seconds</b> (CONGESTION_TIME)</div>
-                    <div>Stalled Vehicle Continuous Trigger: <b>6 seconds</b> (STALL_TIME)</div>
-                    <div>Wrong-Way Detection Window: <b>15 seconds</b> (WRONG_WAY_WINDOW)</div>
-                    <div>ESP8266 RFID Cadence: <b>5 Dual-Beep Cycles</b> (RFID_BEEP_COUNT)</div>
+                <div class="gate-module standby-module-card" id="card-standby-esp32">
+                    <div class="gate-module-head">
+                        <div>
+                            <div class="gate-module-title">ESP32 core road controller</div>
+                            <div class="gate-module-sub">Advertises as <span class="mono">SENTRAX-ESP32</span></div>
+                        </div>
+                        <span class="standby-chip disconnected" id="chip-standby-esp32">DISCONNECTED</span>
+                    </div>
+                    <ul class="gate-subsystems">
+                        <li><i class="ph ph-car-profile" aria-hidden="true"></i><span>4x IR presence grid<span class="mono">GPIO 25, 26, 27, 33</span></span></li>
+                        <li><i class="ph ph-speedometer" aria-hidden="true"></i><span>Dual ultrasonic speed radar<span class="mono">US1, US2</span></span></li>
+                        <li><i class="ph ph-waveform" aria-hidden="true"></i><span>Acoustic crash and rain moisture sensors</span></li>
+                        <li><i class="ph ph-lightning" aria-hidden="true"></i><span>WS2812B dynamic LEDs and E-Ink sign</span></li>
+                    </ul>
+                    <div class="gate-module-foot" id="standby-summary-text">Waiting for the ESP32 core controller. Connect via Bluetooth LE or USB COM to unlock the live system.</div>
                 </div>
             </div>
-        </div>
+        </section>
     </main>
 
-    <!-- ============================================================== -->
-    <!-- MODAL 1: ESP32 CORE GATEWAY PAIRING MENU                       -->
-    <!-- ============================================================== -->
-    <div class="modal-backdrop" id="modal-esp32-pairing">
-        <div class="modal-dialog">
-            <div class="modal-header">
-                <div class="modal-title">
-                    <svg width="22" height="22" fill="#2563eb" viewBox="0 0 24 24"><path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4zm-4.71-1.3l2.59 2.59L13 11.59V6.41zm2.59 11.18L13 17.59v-5.18l2.59 2.59z"/></svg>
-                    <span>ESP32 Core Road Controller Gateway</span>
+    <!-- ============================================================ -->
+    <!-- ASK SENTRAX COPILOT DRAWER                                   -->
+    <!-- ============================================================ -->
+    <div class="copilot-scrim" id="copilot-scrim"></div>
+    <aside class="copilot" id="copilot" aria-label="Ask SentraX" aria-hidden="true">
+        <header class="copilot-head">
+            <div class="copilot-id">
+                <span class="copilot-glyph"><i class="ph-fill ph-sparkle" aria-hidden="true"></i></span>
+                <div>
+                    <div class="copilot-title">Ask SentraX</div>
+                    <div class="copilot-sub" id="copilot-model">Read-only access to live corridor data</div>
                 </div>
-                <div style="display:flex; align-items:center; gap:8px;">
+            </div>
+            <div class="copilot-tools">
+                <button class="icon-btn" id="copilot-reset" type="button" title="New conversation" aria-label="New conversation"><i class="ph ph-arrow-counter-clockwise"></i></button>
+                <button class="icon-btn" id="copilot-close" type="button" title="Close (Esc)" aria-label="Close"><i class="ph ph-x"></i></button>
+            </div>
+        </header>
+
+        <div class="copilot-notice" id="copilot-notice" hidden>
+            <i class="ph ph-key" aria-hidden="true"></i>
+            <span>No API key found. Add <code>ANTHROPIC_API_KEY</code> to <code>.env</code> and restart the server.</span>
+        </div>
+
+        <div class="copilot-log" id="copilot-log" aria-live="polite">
+            <div class="copilot-empty" id="copilot-empty">
+                <h3>What's happening on the corridor?</h3>
+                <p>Ask in plain English. SentraX reads live telemetry, the incident log and analytics to answer.</p>
+                <div class="suggestions">
+                    <button class="suggestion" type="button" data-ask="Why is the road risk score what it is right now?">Why is the risk score what it is?</button>
+                    <button class="suggestion" type="button" data-ask="Summarize the last 20 incidents and point out anything unusual.">Summarize recent incidents</button>
+                    <button class="suggestion" type="button" data-ask="Which sensors are triggered right now, and what does that mean for drivers?">Which sensors are triggered?</button>
+                    <button class="suggestion" type="button" data-ask="Is the hardware connected and healthy? If not, what should I do?">Check the hardware links</button>
+                </div>
+            </div>
+        </div>
+
+        <form class="copilot-compose" id="copilot-form">
+            <label class="sr-only" for="copilot-input">Message Ask SentraX</label>
+            <textarea id="copilot-input" rows="1" placeholder="Ask about risk, incidents or sensors"></textarea>
+            <button class="send-btn" id="copilot-send" type="submit" aria-label="Send"><i class="ph-bold ph-arrow-up"></i></button>
+        </form>
+        <div class="copilot-foot">AI answers can be wrong. The risk engine stays the source of truth.</div>
+    </aside>
+
+    <!-- ============================================================ -->
+    <!-- MODAL: ESP32 CORE GATEWAY PAIRING                            -->
+    <!-- ============================================================ -->
+    <div class="modal-backdrop" id="modal-esp32-pairing">
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="esp32-modal-title">
+            <div class="modal-header">
+                <div class="modal-title" id="esp32-modal-title">
+                    <i class="ph-bold ph-bluetooth" aria-hidden="true"></i>
+                    <span>ESP32 core road controller</span>
+                </div>
+                <div class="modal-header-right">
                     <span class="standby-chip disconnected" id="modal-badge-esp32">DISCONNECTED</span>
-                    <button class="modal-close-btn" id="btn-close-esp32-modal">&times;</button>
+                    <button class="icon-btn" id="btn-close-esp32-modal" aria-label="Close"><i class="ph ph-x"></i></button>
                 </div>
             </div>
             <div class="modal-body">
-                <!-- Method 1: PC Native Bluetooth Gateway -->
-                <div class="connection-method-card" style="border: 1px solid var(--accent-cyan); background: rgba(56, 189, 248, 0.03);">
+                <!-- Option A: PC Bluetooth -->
+                <div class="connection-method-card recommended">
                     <div class="connection-card-title">
-                        <span style="color:var(--accent-cyan); font-weight:700;">⚡ Option A: Windows PC Bluetooth Gateway (Recommended - 100% Reliable)</span>
+                        <span class="method-icon"><i class="ph ph-bluetooth" aria-hidden="true"></i></span>
+                        <span>Windows PC Bluetooth gateway</span>
+                        <span class="chip chip-good">Recommended</span>
                     </div>
                     <div class="connection-card-desc">
-                        Connects directly through Windows 10/11 native Bluetooth adapter via Bleak. Works in <b>any browser</b> without requiring experimental Web Bluetooth flags or HTTPS.
-                        <div style="margin-top:8px; font-size:11px; color:var(--text-secondary); background:rgba(56,189,248,0.1); padding:6px 10px; border-radius:4px; border-left:3px solid var(--accent-cyan);">
-                            <b>Advertised Name:</b> <code style="color:var(--accent-cyan); font-weight:800; font-size:12px;">SENTRAX-ESP32</code><br>
-                            <span style="color:#f59e0b;"><b>Important:</b> If previously paired in Windows Settings (Bluetooth & devices), Windows may lock access. Unpair/Remove the device in Windows Settings before connecting here or via Web Bluetooth.</span>
+                        Connects through the Windows 10/11 Bluetooth adapter via Bleak. Works in any browser without Web Bluetooth flags or HTTPS.
+                        <div class="method-callout">
+                            <div>Advertised name <code>SENTRAX-ESP32</code></div>
+                            <div class="callout-warn">If the device was paired in Windows Settings, Windows may lock access. Remove it under Bluetooth &amp; devices before connecting here.</div>
                         </div>
                     </div>
-                    <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
-                        <button class="btn btn-primary" id="btn-pc-ble-autoconnect" style="background:#2563eb; color:#fff; font-weight:700; padding:10px 18px;">
-                            ⚡ ONE-CLICK AUTO-CONNECT BLE
+                    <div class="method-actions">
+                        <button class="btn btn-primary" id="btn-pc-ble-autoconnect">
+                            <i class="ph-bold ph-lightning" aria-hidden="true"></i>One-click auto-connect
                         </button>
-                        <button class="btn btn-outline" id="btn-pc-ble-disconnect" style="display:none; color:var(--accent-rose); border-color:var(--accent-rose);">
-                            Disconnect BLE
-                        </button>
+                        <button class="btn btn-danger-ghost" id="btn-pc-ble-disconnect" style="display:none;">Disconnect BLE</button>
                     </div>
-                    <div style="margin-top:12px; font-size:11px; color:var(--text-muted);">
-                        Or scan and select from detected Bluetooth devices:
-                    </div>
-                    <div style="display:flex; gap:10px; margin-top:6px; margin-bottom:10px;">
-                        <select class="com-select" id="select-pc-ble-device" style="flex:1; margin-bottom:0;">
-                            <option value="">Click 'Scan BLE' to find nearby devices...</option>
+                    <div class="method-hint">Or scan and pick a nearby Bluetooth device</div>
+                    <div class="method-row">
+                        <select class="com-select" id="select-pc-ble-device" aria-label="Detected Bluetooth devices">
+                            <option value="">Select Scan to find nearby devices</option>
                         </select>
-                        <button class="btn btn-outline" id="btn-scan-pc-ble" title="Scan Nearby Bluetooth Devices">↻ Scan BLE</button>
-                        <button class="btn btn-secondary" id="btn-connect-pc-ble-selected" style="font-weight:600;">Connect Selected</button>
+                        <button class="btn btn-ghost" id="btn-scan-pc-ble" title="Scan nearby Bluetooth devices">Scan</button>
+                        <button class="btn btn-secondary" id="btn-connect-pc-ble-selected">Connect</button>
                     </div>
-                    <div id="pc-ble-status" style="font-size:12px; color:var(--text-muted); font-weight:600; margin-top:4px;">
-                        Ready to connect via Windows Bluetooth.
+                    <div class="method-status" id="pc-ble-status">Ready to connect via Windows Bluetooth.</div>
+                </div>
+
+                <!-- Option B: Web Bluetooth -->
+                <div class="connection-method-card">
+                    <div class="connection-card-title">
+                        <span class="method-icon"><i class="ph ph-browser" aria-hidden="true"></i></span>
+                        <span>Browser Web Bluetooth</span>
+                    </div>
+                    <div class="connection-card-desc">Direct connection from this page through the Chrome / Edge Web Bluetooth dialog.</div>
+                    <div class="method-actions">
+                        <button class="btn btn-secondary" id="btn-web-ble-esp32-pair">Pair via Web Bluetooth</button>
+                        <button class="btn btn-danger-ghost" id="btn-web-ble-esp32-disconnect" style="display:none;">Disconnect Web BLE</button>
+                        <span class="method-status inline" id="web-ble-esp32-status">Not connected</span>
                     </div>
                 </div>
 
-                <!-- Method 2: Browser Web Bluetooth -->
+                <!-- Option C: Serial COM -->
                 <div class="connection-method-card">
                     <div class="connection-card-title">
-                        <span style="color:var(--accent-purple); font-weight:700;">Option B: Browser Web Bluetooth (In-Browser Web BLE)</span>
+                        <span class="method-icon"><i class="ph ph-usb" aria-hidden="true"></i></span>
+                        <span>USB cable / Bluetooth virtual COM port</span>
                     </div>
-                    <div class="connection-card-desc">
-                        Direct connection from the web page using Chrome/Edge Web Bluetooth API dialog.
-                    </div>
-                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:10px;">
-                        <button class="btn btn-secondary" id="btn-web-ble-esp32-pair" style="font-weight:700; padding:8px 16px;">
-                            PAIR VIA WEB BLUETOOTH
-                        </button>
-                        <button class="btn btn-outline" id="btn-web-ble-esp32-disconnect" style="display:none; color:var(--accent-rose); border-color:var(--accent-rose);">
-                            Disconnect Web BLE
-                        </button>
-                        <span id="web-ble-esp32-status" style="font-size:12px; color:var(--text-muted); font-weight:600;">Not connected</span>
-                    </div>
-                </div>
-
-                <!-- Method 3: Serial COM Port -->
-                <div class="connection-method-card">
-                    <div class="connection-card-title">
-                        <span style="color:var(--accent-emerald); font-weight:700;">Option C: USB Cable / Bluetooth Virtual COM Port</span>
-                    </div>
-                    <div class="connection-card-desc">
-                        Direct hardware connection via USB COM port or Windows Bluetooth Virtual COM port (115200 baud). Please close Arduino IDE Serial Monitor before connecting.
-                    </div>
-                    <div style="display:flex; gap:10px; margin-bottom:10px;">
-                        <select class="com-select" id="select-esp32-com-port" style="flex:1; margin-bottom:0;">
-                            <option value="">Scanning detected COM ports...</option>
+                    <div class="connection-card-desc">Direct connection over a USB or Windows virtual COM port at 115200 baud. Close the Arduino IDE Serial Monitor first.</div>
+                    <div class="method-row">
+                        <select class="com-select" id="select-esp32-com-port" aria-label="Detected COM ports">
+                            <option value="">Scanning detected COM ports</option>
                         </select>
-                        <button class="btn btn-outline" id="btn-refresh-esp32-ports" title="Refresh Detected COM Ports">↻ Refresh</button>
+                        <button class="btn btn-ghost" id="btn-refresh-esp32-ports" title="Refresh detected COM ports"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Refresh</button>
                     </div>
-                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                        <button class="btn btn-primary" id="btn-connect-esp32-serial" style="background:var(--accent-emerald); color:#000; font-weight:700; padding:10px 18px;">
-                            CONNECT ESP32 COM PORT
-                        </button>
-                        <button class="btn btn-outline" id="btn-disconnect-esp32-serial" style="display:none; color:var(--accent-rose); border-color:var(--accent-rose);">
-                            Disconnect COM
-                        </button>
-                        <span id="esp32-serial-status" style="font-size:12px; color:var(--text-muted); font-weight:600;">Not connected</span>
+                    <div class="method-actions">
+                        <button class="btn btn-secondary" id="btn-connect-esp32-serial">Connect COM port</button>
+                        <button class="btn btn-danger-ghost" id="btn-disconnect-esp32-serial" style="display:none;">Disconnect COM</button>
+                        <span class="method-status inline" id="esp32-serial-status">Not connected</span>
                     </div>
                 </div>
 
-                <!-- ESP32 Subsystems Status -->
-                <div class="connection-method-card">
-                    <div class="connection-card-title">
-                        <span>ESP32 Physical Subsystem Mapping</span>
-                    </div>
+                <!-- Subsystem map -->
+                <div class="connection-method-card subtle">
+                    <div class="connection-card-title"><span>ESP32 physical subsystem mapping</span></div>
                     <div class="subsystems-grid">
-                        <div><span style="color:var(--accent-cyan);">●</span> IR1-4 Grid (GPIO 25, 26, 27, 33)</div>
-                        <div><span style="color:var(--accent-cyan);">●</span> Dual Ultrasonic Radar (US1 & US2)</div>
-                        <div><span style="color:var(--accent-emerald);">●</span> Acoustic Crash Sensor (GPIO 32)</div>
-                        <div><span style="color:var(--accent-emerald);">●</span> Rain Moisture Sensor (GPIO 35)</div>
-                        <div><span style="color:var(--accent-amber);">●</span> DHT11 Temp/Humidity (GPIO 13)</div>
-                        <div><span style="color:var(--accent-amber);">●</span> 60x WS2812B LEDs (GPIO 2 - Swapped)</div>
-                        <div><span style="color:var(--accent-purple);">●</span> 1.54" Waveshare E-Ink (Pins 16/17/21/22)</div>
-                        <div><span style="color:var(--accent-purple);">●</span> ESP8266 LinkSerial (GPIO 4 RX, 5 TX)</div>
+                        <div>IR1-4 grid <span class="mono">GPIO 25, 26, 27, 33</span></div>
+                        <div>Dual ultrasonic radar <span class="mono">US1, US2</span></div>
+                        <div>Acoustic crash sensor <span class="mono">GPIO 32</span></div>
+                        <div>Rain moisture sensor <span class="mono">GPIO 35</span></div>
+                        <div>DHT11 temp / humidity <span class="mono">GPIO 13</span></div>
+                        <div>60x WS2812B LEDs <span class="mono">GPIO 2</span></div>
+                        <div>1.54" Waveshare E-Ink <span class="mono">16, 17, 21, 22</span></div>
+                        <div>ESP8266 link serial <span class="mono">GPIO 4 RX, 5 TX</span></div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline" id="btn-close-esp32-footer">Done</button>
+                <button class="btn btn-ghost" id="btn-close-esp32-footer">Done</button>
             </div>
         </div>
     </div>
 
-    <!-- Client Application JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="/static/js/ui.js"></script>
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/copilot.js"></script>
+    <script src="/static/js/visuals.js"></script>
 </body>
 </html>
