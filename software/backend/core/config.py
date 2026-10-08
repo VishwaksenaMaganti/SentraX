@@ -45,11 +45,5 @@ class Settings(BaseModel):
     # Google Maps Platform Key (securely loaded from .env)
     GOOGLE_MAPS_API_KEY: str = os.getenv("GOOGLE_MAPS_API_KEY", "")
 
-    # Ask SentraX copilot (Claude). The key itself is read by the Anthropic SDK from the
-    # environment and never sent to the browser; only whether it is set is exposed.
-    AI_MODEL: str = os.getenv("SENTRAX_AI_MODEL", "claude-opus-5-5")
-    AI_EFFORT: str = os.getenv("SENTRAX_AI_EFFORT", "medium")
-    ANTHROPIC_API_KEY_SET: bool = bool(os.getenv("ANTHROPIC_API_KEY"))
-
 
 settings = Settings()

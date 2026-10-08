@@ -3,7 +3,7 @@
  * Visual behaviour that sits on top of app.js (which owns hardware pairing and telemetry):
  *  - Chart.js theme, risk gauge, state coloring of live readings
  *  - Page subtitles, lazy camera stream, Road Intelligence data + scroll-spy
- *  - Event History table and Settings copilot status
+ *  - Event History table
  * app.js keeps writing values into the DOM; this file observes those writes instead of
  * re-implementing them, so the pairing / telemetry logic stays untouched.
  */
@@ -313,8 +313,7 @@
     // ---------------------------------------------------------------------
     const pageHooks = {
         intelligence: { enter: enterIntelligence, leave: leaveIntelligence },
-        events: { enter: () => loadEvents() },
-        settings: { enter: loadAiStatus }
+        events: { enter: () => loadEvents() }
     };
     let currentTab = 'command-center';
 
@@ -516,24 +515,6 @@
         $('btn-refresh-events')?.addEventListener('click', () => loadEvents());
     }
 
-    // ---------------------------------------------------------------------
-    // Settings: copilot status
-    // ---------------------------------------------------------------------
-    async function loadAiStatus() {
-        try {
-            const res = await fetch('/api/ai/status');
-            if (!res.ok) return;
-            const s = await res.json();
-            $('ai-model').textContent = s.model;
-            $('ai-effort').textContent = titleCase(s.effort);
-            const chip = $('ai-key-state');
-            chip.textContent = s.api_key_configured ? 'Configured' : 'Not set';
-            chip.className = `chip ${s.api_key_configured ? 'chip-good' : 'chip-warn'}`;
-        } catch (err) {
-            /* backend restarting */
-        }
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
         hookNavigation();
         hookTelemetry();
@@ -547,8 +528,6 @@
         initFactorList('risk-reasons-list');
         initSubnav();
         initEvents();
-        const kbd = $('kbd-hint');
-        if (kbd && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) kbd.textContent = '⌘ K';
     });
 
     window.SentraxUI = { escapeHtml };

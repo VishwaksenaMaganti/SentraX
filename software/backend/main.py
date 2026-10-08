@@ -18,7 +18,6 @@ from software.backend.core.config import settings
 from software.backend.core.logging import setup_logging
 from software.backend.database.connection import init_db
 from software.backend.api.routes import router as api_router, set_services
-from software.backend.ai.routes import router as ai_router
 from software.backend.api.websocket import ws_hub
 from software.backend.simulation.simulator import SentraXSimulator
 from software.backend.cv.cv_pipeline import CVPipeline
@@ -218,7 +217,6 @@ app.add_middleware(
 
 # API routes
 app.include_router(api_router, prefix=settings.API_PREFIX)
-app.include_router(ai_router, prefix=settings.API_PREFIX)
 
 
 # WebSocket endpoint for real-time live telemetry

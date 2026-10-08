@@ -71,9 +71,6 @@
         </nav>
 
         <div class="rail-foot">
-            <button type="button" class="rail-btn" data-copilot-open>
-                <i class="ph ph-sparkle" aria-hidden="true"></i><span class="nav-label">Ask SentraX</span>
-            </button>
             <div class="rail-version"><span class="nav-label">SentraX v2.4 engine</span></div>
         </div>
     </aside>
@@ -96,11 +93,6 @@
                     <span class="pulse-dot"></span>
                     <span id="master-gate-label">Standby</span>
                 </div>
-                <button class="btn-ask" type="button" data-copilot-open title="Ask SentraX (Ctrl+K)">
-                    <i class="ph ph-sparkle" aria-hidden="true"></i>
-                    <span class="btn-ask-label">Ask SentraX</span>
-                    <kbd class="kbd" id="kbd-hint">Ctrl K</kbd>
-                </button>
             </div>
         </header>
 
@@ -165,9 +157,6 @@
                         <div class="risk-factors">
                             <div class="card-head">
                                 <h2 class="card-title">Active safety risk factors</h2>
-                                <button class="btn btn-ghost btn-sm" type="button" data-ask="Explain the current road risk score and each active risk factor in plain English.">
-                                    <i class="ph ph-sparkle" aria-hidden="true"></i>Explain with AI
-                                </button>
                             </div>
                             <ul class="factor-list" id="risk-reasons-list">
                                 <li>Road clear and dry (baseline)</li>
@@ -1133,16 +1122,6 @@
                             <div class="kv-row"><dt>Ultrasonic sensor distance</dt><dd><b>0.30 m</b><code>SENSOR_DISTANCE</code></dd></div>
                         </dl>
                     </section>
-                    <section class="card">
-                        <div class="card-head"><h2 class="card-title">Ask SentraX copilot</h2></div>
-                        <dl class="kv-list">
-                            <div class="kv-row"><dt>Model</dt><dd><b id="ai-model">--</b></dd></div>
-                            <div class="kv-row"><dt>Reasoning effort</dt><dd><b id="ai-effort">--</b></dd></div>
-                            <div class="kv-row"><dt>API key</dt><dd><span class="chip chip-muted" id="ai-key-state">Checking</span></dd></div>
-                            <div class="kv-row"><dt>Data access</dt><dd><b>Read-only</b></dd></div>
-                        </dl>
-                        <p class="card-note">Set <code>ANTHROPIC_API_KEY</code> in the project's <code>.env</code> file and restart the server to enable the copilot.</p>
-                    </section>
                 </div>
             </div>
         </div>
@@ -1170,9 +1149,6 @@
                         <button class="btn btn-primary btn-lg" id="btn-open-esp32-modal" type="button">
                             <i class="ph-bold ph-bluetooth" aria-hidden="true"></i>Pair controller
                         </button>
-                        <button class="btn btn-glass btn-lg" type="button" data-copilot-open>
-                            <i class="ph ph-sparkle" aria-hidden="true"></i>Ask SentraX
-                        </button>
                     </div>
                 </div>
 
@@ -1195,51 +1171,6 @@
             </div>
         </section>
     </main>
-
-    <!-- ============================================================ -->
-    <!-- ASK SENTRAX COPILOT DRAWER                                   -->
-    <!-- ============================================================ -->
-    <div class="copilot-scrim" id="copilot-scrim"></div>
-    <aside class="copilot" id="copilot" aria-label="Ask SentraX" aria-hidden="true">
-        <header class="copilot-head">
-            <div class="copilot-id">
-                <span class="copilot-glyph"><i class="ph-fill ph-sparkle" aria-hidden="true"></i></span>
-                <div>
-                    <div class="copilot-title">Ask SentraX</div>
-                    <div class="copilot-sub" id="copilot-model">Read-only access to live corridor data</div>
-                </div>
-            </div>
-            <div class="copilot-tools">
-                <button class="icon-btn" id="copilot-reset" type="button" title="New conversation" aria-label="New conversation"><i class="ph ph-arrow-counter-clockwise"></i></button>
-                <button class="icon-btn" id="copilot-close" type="button" title="Close (Esc)" aria-label="Close"><i class="ph ph-x"></i></button>
-            </div>
-        </header>
-
-        <div class="copilot-notice" id="copilot-notice" hidden>
-            <i class="ph ph-key" aria-hidden="true"></i>
-            <span>No API key found. Add <code>ANTHROPIC_API_KEY</code> to <code>.env</code> and restart the server.</span>
-        </div>
-
-        <div class="copilot-log" id="copilot-log" aria-live="polite">
-            <div class="copilot-empty" id="copilot-empty">
-                <h3>What's happening on the corridor?</h3>
-                <p>Ask in plain English. SentraX reads live telemetry, the incident log and analytics to answer.</p>
-                <div class="suggestions">
-                    <button class="suggestion" type="button" data-ask="Why is the road risk score what it is right now?">Why is the risk score what it is?</button>
-                    <button class="suggestion" type="button" data-ask="Summarize the last 20 incidents and point out anything unusual.">Summarize recent incidents</button>
-                    <button class="suggestion" type="button" data-ask="Which sensors are triggered right now, and what does that mean for drivers?">Which sensors are triggered?</button>
-                    <button class="suggestion" type="button" data-ask="Is the hardware connected and healthy? If not, what should I do?">Check the hardware links</button>
-                </div>
-            </div>
-        </div>
-
-        <form class="copilot-compose" id="copilot-form">
-            <label class="sr-only" for="copilot-input">Message Ask SentraX</label>
-            <textarea id="copilot-input" rows="1" placeholder="Ask about risk, incidents or sensors"></textarea>
-            <button class="send-btn" id="copilot-send" type="submit" aria-label="Send"><i class="ph-bold ph-arrow-up"></i></button>
-        </form>
-        <div class="copilot-foot">AI answers can be wrong. The risk engine stays the source of truth.</div>
-    </aside>
 
     <!-- ============================================================ -->
     <!-- MODAL: ESP32 CORE GATEWAY PAIRING                            -->
@@ -1346,7 +1277,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="/static/js/ui.js"></script>
     <script src="/static/js/app.js"></script>
-    <script src="/static/js/copilot.js"></script>
     <script src="/static/js/visuals.js"></script>
 </body>
 </html>
