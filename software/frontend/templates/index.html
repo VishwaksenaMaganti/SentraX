@@ -833,33 +833,223 @@
         </div>
 
         <!-- ========================================== -->
-        <!-- 8. MAP / NAVIGATION -->
+        <!-- 8. MAP / NAVIGATION (IN-CAR SCREEN REPLICA) -->
         <!-- ========================================== -->
-        <div class="page-container" id="page-navigation" data-title="Google Maps-Style Navigation">
-            <div class="dashboard-grid">
-                <div class="card" style="grid-column: span 8;">
-                    <div class="card-header">
-                        <span class="card-title">Corridor Navigation & Road-Health Segmentation</span>
-                        <span style="font-size:11px; color:var(--accent-emerald);">COLOR-CODED HEALTH</span>
+        <div class="page-container" id="page-navigation" data-title="Google Maps In-Car Navigation">
+            <div class="nav-screen-layout" id="nav-layout-wrapper">
+                
+                <!-- iPhone 16 Pro Device Frame (Exact visual replica of uploaded image) -->
+                <div class="iphone-frame" id="nav-iphone-frame">
+                    
+                    <!-- Dynamic Island Notch -->
+                    <div class="dynamic-island">
+                        <div class="dynamic-island-camera"></div>
+                        <div class="dynamic-island-sensor"></div>
                     </div>
-                    <div id="sentrax-map"></div>
-                </div>
-                <div class="card" style="grid-column: span 4;">
-                    <div class="card-title">Route Summary</div>
-                    <div style="margin-top:15px; font-size:13px; line-height:1.9;">
-                        <div>Overall Route Health: <b id="route-health-score">76 / 100</b></div>
-                        <div>Health Band: <b id="route-health-band" style="color:var(--accent-amber);">MODERATE</b></div>
-                        <div>Advisory Route Speed: <b id="route-advisory-speed" style="color:var(--accent-cyan);">50 km/h</b></div>
-                        <div>Potholes Identified: <b id="route-potholes">2</b></div>
-                        <div>Collision Blackspots: <b id="route-collisions">1</b></div>
-                        <div style="margin-top:10px; padding:10px; background:var(--bg-hover); border-radius:var(--radius-sm);">
-                            <span style="font-size:11px; color:var(--text-muted); font-weight:700;">MULTIMODAL RECOMMENDATION</span>
-                            <div id="route-transit-rec" style="font-size:12px; font-weight:600; color:var(--accent-emerald); margin-top:4px;">
-                                CAR / PUBLIC TRANSIT
+
+                    <!-- iOS Top Status Bar -->
+                    <div class="iphone-status-bar">
+                        <span class="iphone-time" id="nav-live-clock">6:22</span>
+                        <div class="iphone-status-icons">
+                            <!-- Cellular Signal -->
+                            <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.57 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <!-- Wi-Fi -->
+                            <svg viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4zm0 3.5c3.67 0 7.02 1.39 9.58 3.68L12 18.25 2.42 11.18C4.98 8.89 8.33 7.5 12 7.5z"/></svg>
+                            <!-- Battery with Lightning Bolt -->
+                            <svg viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4zM11 20v-5.5H9L13 7v5.5h2L11 20z"/></svg>
+                        </div>
+                    </div>
+
+                    <!-- Weather Pill Widget (Left) -->
+                    <div class="weather-pill">
+                        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+                        <span class="weather-pill-temp"><span id="nav-weather-temp">26</span>°</span>
+                        <div class="weather-pill-divider"></div>
+                        <div class="weather-pill-aqi">
+                            <span>AQI <span id="nav-weather-aqi">72</span></span>
+                            <div class="aqi-dot"></div>
+                        </div>
+                    </div>
+
+                    <!-- Map Viewport Container -->
+                    <div id="sentrax-nav-map" class="nav-phone-map"></div>
+
+                    <!-- Floating Action Buttons on the Right (Layers, Navigation Mode, Compass) -->
+                    <div class="nav-floating-actions">
+                        <button class="nav-float-btn" id="btn-map-layers" title="Toggle Map Layer (Dark / Satellite)">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                        </button>
+                        <button class="nav-float-btn" id="btn-map-car" title="Center Navigation Vehicle">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 17h.01M16 17h.01M4 11l2-6h12l2 6M4 11h16M4 11v6a1 1 0 001 1h1m14-7v6a1 1 0 01-1 1h-1"/></svg>
+                        </button>
+                        <button class="nav-float-btn" id="btn-map-compass" title="Fit Entire Route">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Directions & Live Route Metrics Bottom Sheet (Exact replica) -->
+                    <div class="nav-bottom-drawer" id="nav-bottom-drawer">
+                        <!-- Top Drag Handle -->
+                        <div class="nav-drawer-drag-handle" id="nav-drawer-toggle"></div>
+
+                        <!-- Header -->
+                        <div class="nav-drawer-header">
+                            <div class="nav-drawer-title">Directions</div>
+                            <button class="nav-drawer-close" id="btn-close-directions" title="Collapse / Expand Drawer">
+                                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+
+                        <!-- Subtitle -->
+                        <div class="nav-drawer-subtitle">Live Route Metrics</div>
+
+                        <!-- Card 1: Road Health -->
+                        <div class="nav-metric-box">
+                            <div class="nav-metric-icon-wrap">
+                                <!-- Road Perspective Icon -->
+                                <svg class="road-icon-graphic" viewBox="0 0 32 32" fill="none">
+                                    <path d="M9 28L13 4H19L23 28H9Z" fill="#2B303C"/>
+                                    <path d="M8 29L12.5 3H19.5L24 29" stroke="#71717A" stroke-width="2" stroke-linecap="round"/>
+                                    <line x1="16" y1="5" x2="16" y2="10" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="2 2"/>
+                                    <line x1="16" y1="14" x2="16" y2="20" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="2 2"/>
+                                    <line x1="16" y1="24" x2="16" y2="28" stroke="#FFFFFF" stroke-width="2"/>
+                                </svg>
                             </div>
+                            <div class="nav-metric-body">
+                                <div class="nav-metric-tag">Road Health</div>
+                                <div class="nav-metric-headline">
+                                    <span id="nav-road-health-val">68% (Fair)</span>
+                                </div>
+                                <div class="nav-health-track">
+                                    <div class="nav-health-fill" id="nav-road-health-bar" style="width: 68%;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Road Anatomy -->
+                        <div class="nav-metric-box">
+                            <div class="nav-metric-icon-wrap">
+                                <!-- Speed Limit Sign with Verified Shield -->
+                                <div class="speed-sign-graphic">
+                                    <span class="sign-title">LIMIT</span>
+                                    <span class="sign-val" id="nav-sign-limit-val">30</span>
+                                    <div class="speed-sign-shield">
+                                        <svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="nav-metric-body">
+                                <div class="nav-metric-tag">Road Anatomy</div>
+                                <div class="nav-anatomy-desc" id="nav-road-anatomy-val">Surface: Asphalt | Lanes: 2 | Shoulder: Concrete</div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Live Sensor Speed & Safe Limit Strip -->
+                        <div class="nav-live-strip">
+                            <div>
+                                <span style="color:#71717a; font-size:10px; font-weight:600; text-transform:uppercase;">Vehicle Speed</span>
+                                <div class="nav-speed-display">
+                                    <span class="nav-speed-curr" id="nav-current-speed">0.0</span>
+                                    <span style="font-size:10px; color:#94a3b8;">km/h</span>
+                                </div>
+                            </div>
+                            <div style="text-align:right;">
+                                <span style="color:#71717a; font-size:10px; font-weight:600; text-transform:uppercase;">Dynamic Safe Limit</span>
+                                <div>
+                                    <span class="nav-speed-rec-badge" id="nav-speed-rec-badge">LIMIT: 80 km/h</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- iPhone Home Bar -->
+                        <div class="iphone-home-bar"></div>
+                    </div>
+                </div>
+
+                <!-- Side Route Setup & Google Maps Configuration Panel -->
+                <div class="nav-console-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+                        <div>
+                            <h3 style="font-size:16px; font-weight:700; color:var(--text-primary); margin:0;">Route Corridor & Map Configuration</h3>
+                            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Select start and destination points along the smart sensor road.</div>
+                        </div>
+                        <button class="btn btn-outline btn-sm" id="btn-toggle-expanded-view" style="font-size:11px;">
+                            Toggle Cockpit View
+                        </button>
+                    </div>
+
+                    <!-- Location 1: Origin -->
+                    <div class="nav-field-group">
+                        <label class="nav-field-label">ORIGIN (START POINT)</label>
+                        <div class="nav-input-wrap">
+                            <svg class="nav-input-icon" fill="none" stroke="#10b981" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="2.5" fill="#10b981"/></svg>
+                            <input type="text" class="nav-input" id="nav-input-origin" value="Woxsen North Roundabout" placeholder="e.g. Woxsen North Roundabout">
+                        </div>
+                    </div>
+
+                    <!-- Swap & Presets Row -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin:-8px 0 12px 0;">
+                        <button class="btn btn-outline btn-sm" id="btn-swap-locations" style="padding:4px 10px; font-size:11px;">
+                            ⇅ Swap Start & Destination
+                        </button>
+                        <span style="font-size:11px; color:var(--accent-cyan);" id="nav-route-dist-eta">1.8 km | 4.5 mins</span>
+                    </div>
+
+                    <!-- Location 2: Destination -->
+                    <div class="nav-field-group">
+                        <label class="nav-field-label">DESTINATION (END POINT)</label>
+                        <div class="nav-input-wrap">
+                            <svg class="nav-input-icon" fill="none" stroke="#ef4444" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
+                            <input type="text" class="nav-input" id="nav-input-dest" value="Woxsen Hostels & Blue Embers" placeholder="e.g. Woxsen Hostels & Blue Embers">
+                        </div>
+                    </div>
+
+                    <!-- Presets -->
+                    <div class="nav-field-group">
+                        <label class="nav-field-label">QUICK ROUTE PRESETS</label>
+                        <div class="nav-preset-pills">
+                            <span class="nav-preset-pill active" data-preset="woxsen-campus">Woxsen Campus Loop (Image Exact)</span>
+                            <span class="nav-preset-pill" data-preset="woxsen-gate">Main Gate → Academic Block</span>
+                            <span class="nav-preset-pill" data-preset="corridor-test">Sensor Track (US1 → IR4)</span>
+                        </div>
+                    </div>
+
+                    <!-- Update Route Button -->
+                    <button class="btn btn-primary" id="btn-recompute-route" style="width:100%; margin-bottom:18px;">
+                        Update Route & Recalculate Sensor Metrics
+                    </button>
+
+                    <!-- Google Maps Platform Status & API Key Integration -->
+                    <div style="background:var(--bg-dark); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:14px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-size:12px; font-weight:700; color:var(--text-primary);">Google Maps Platform Integration</span>
+                            <span class="badge" id="nav-gmaps-badge" style="background:rgba(56,189,248,0.15); color:var(--accent-cyan); border:1px solid rgba(56,189,248,0.3);">Maps JS & Routes API</span>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:10px;">
+                            Connects directly to the Google Maps JavaScript API and Routes API for photorealistic map tiles, satellite hybrid layers, and traffic services. Use your Google Cloud API key or a free Maps Demo Key for prototyping.
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <input type="password" class="nav-input" id="nav-gmaps-key-input" placeholder="Paste Google Maps API Key here..." style="font-size:12px; padding-left:12px;">
+                            <button class="btn btn-outline btn-sm" id="btn-save-gmaps-key" style="white-space:nowrap;">
+                                Save Key
+                            </button>
+                        </div>
+                        <div style="margin-top:6px; font-size:10px; color:#71717a;" id="nav-gmaps-key-status">
+                            Interactive navigation mode active with dark vector styling.
+                        </div>
+                    </div>
+
+                    <!-- Live Hardware Sensor Link Information -->
+                    <div style="margin-top:14px; padding:12px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:var(--radius-md); font-size:11px; line-height:1.6;">
+                        <div style="font-weight:700; color:var(--accent-emerald); margin-bottom:4px;">
+                            Physical Hardware Sensor Feedback Active
+                        </div>
+                        <div style="color:var(--text-muted);" id="nav-sensor-explanation">
+                            The Road Health score (68% Fair), Road Anatomy, and Speed Limits dynamically adapt in real time to the live ESP32 sensors (moisture, IR grid, ultrasonic speed, sound/collision).
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
 

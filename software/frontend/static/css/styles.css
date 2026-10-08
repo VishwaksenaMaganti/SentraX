@@ -1603,3 +1603,558 @@ header.top-header {
   background: rgba(239, 68, 68, 0.1);
 }
 
+/* =====================================================================
+   GOOGLE MAPS & IN-CAR MOBILE NAVIGATION INTERFACE (REFERENCE REPLICA)
+   ===================================================================== */
+
+.nav-screen-layout {
+  display: flex;
+  flex-direction: row;
+  gap: 28px;
+  align-items: flex-start;
+  justify-content: center;
+  margin-top: 10px;
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .nav-screen-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+/* Outer iPhone 16 Pro Frame Replica */
+.iphone-frame {
+  width: 385px;
+  height: 800px;
+  max-height: 88vh;
+  border-radius: 52px;
+  position: relative;
+  background: #0f141c;
+  box-shadow: 
+    0 25px 70px -10px rgba(0, 0, 0, 0.9),
+    0 0 0 11px #22262d,
+    0 0 0 13px #121417,
+    0 0 45px rgba(47, 128, 237, 0.15);
+  overflow: hidden;
+  user-select: none;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Dynamic Island & Notch */
+.dynamic-island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 32px;
+  background: #000000;
+  border-radius: 20px;
+  z-index: 102;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.dynamic-island-camera {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #0d121c;
+  box-shadow: inset 0 0 2px #38bdf8;
+}
+
+.dynamic-island-sensor {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #151821;
+}
+
+/* Top Status Bar */
+.iphone-status-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  z-index: 101;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 26px 0 26px;
+  color: #FFFFFF;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  pointer-events: none;
+}
+
+.iphone-time {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: #FFFFFF;
+}
+
+.iphone-status-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.iphone-status-icons svg {
+  width: 15px;
+  height: 15px;
+  fill: #FFFFFF;
+}
+
+/* Weather Pill Widget */
+.weather-pill {
+  position: absolute;
+  top: 56px;
+  left: 18px;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(18, 23, 34, 0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  padding: 5px 11px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  color: #FFFFFF;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+}
+
+.weather-pill-temp {
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.weather-pill-divider {
+  width: 1px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.weather-pill-aqi {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a1a1aa;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.aqi-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+/* Map Canvas Container inside Phone */
+.nav-phone-map {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  background: #0f141c;
+}
+
+/* Floating Navigation Action Buttons on the Right */
+.nav-floating-actions {
+  position: absolute;
+  right: 14px;
+  top: 48%;
+  transform: translateY(-50%);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nav-float-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 21px;
+  background: rgba(26, 31, 42, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-float-btn:hover {
+  background: rgba(38, 45, 61, 0.95);
+  transform: scale(1.05);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.nav-float-btn svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 2.2;
+}
+
+/* Bottom Sheet Container (Exact replica of Directions drawer) */
+.nav-bottom-drawer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 95;
+  background: #16181D;
+  border-radius: 28px 28px 0 0;
+  padding: 10px 16px 14px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -12px 45px rgba(0, 0, 0, 0.75);
+  color: #FFFFFF;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  max-height: 52%;
+  display: flex;
+  flex-direction: column;
+  transition: max-height 0.3s ease;
+}
+
+.nav-drawer-drag-handle {
+  width: 38px;
+  height: 4px;
+  background: #4E525E;
+  border-radius: 2px;
+  margin: 0 auto 10px auto;
+  cursor: grab;
+}
+
+.nav-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-drawer-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: -0.3px;
+}
+
+.nav-drawer-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #282B34;
+  border: none;
+  color: #8E929E;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-drawer-close:hover {
+  background: #363B48;
+  color: #FFFFFF;
+}
+
+.nav-drawer-subtitle {
+  font-size: 13px;
+  color: #8E929E;
+  font-weight: 500;
+  margin-top: 2px;
+  margin-bottom: 12px;
+}
+
+/* Metric Cards inside Drawer */
+.nav-metric-box {
+  background: #202229;
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin-bottom: 9px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.nav-metric-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #18191f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nav-metric-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-metric-tag {
+  font-size: 11px;
+  color: #8E929E;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.nav-metric-headline {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Progress bar for Road Health */
+.nav-health-track {
+  width: 100%;
+  height: 5px;
+  background: #353842;
+  border-radius: 3px;
+  margin-top: 7px;
+  overflow: hidden;
+}
+
+.nav-health-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #F59E0B, #EAB308);
+  border-radius: 3px;
+  transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Road Anatomy Text */
+.nav-anatomy-desc {
+  font-size: 12.5px;
+  color: #d1d5db;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Sensor Situation & Speed Bar */
+.nav-live-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #18191f;
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.nav-speed-display {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.nav-speed-curr {
+  font-size: 15px;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+.nav-speed-rec-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* iPhone Home Bar */
+.iphone-home-bar {
+  width: 130px;
+  height: 4px;
+  background: #FFFFFF;
+  opacity: 0.75;
+  border-radius: 2px;
+  margin: 10px auto 0 auto;
+}
+
+/* Side Control Console for Route & Google Maps Configuration */
+.nav-console-panel {
+  flex: 1;
+  max-width: 580px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.nav-field-group {
+  margin-bottom: 16px;
+}
+
+.nav-field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.nav-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nav-input {
+  width: 100%;
+  padding: 10px 14px 10px 38px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.nav-input:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.nav-input-icon {
+  position: absolute;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.nav-preset-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.nav-preset-pill {
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-preset-pill:hover, .nav-preset-pill.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* Speed Limit Sign Icon Graphic */
+.speed-sign-graphic {
+  width: 26px;
+  height: 30px;
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.speed-sign-graphic .sign-title {
+  font-size: 6px;
+  font-weight: 900;
+  color: #000000;
+  line-height: 1;
+}
+
+.speed-sign-graphic .sign-val {
+  font-size: 12px;
+  font-weight: 900;
+  color: #000000;
+  line-height: 1;
+}
+
+.speed-sign-shield {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #2563EB;
+  border: 1.5px solid #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.speed-sign-shield svg {
+  width: 8px;
+  height: 8px;
+  fill: #FFFFFF;
+}
+
+/* Road Perspective Graphic */
+.road-icon-graphic {
+  width: 28px;
+  height: 28px;
+  position: relative;
+}
+
+/* Widescreen expanded layout toggle */
+.nav-screen-layout.expanded-mode .iphone-frame {
+  width: 100%;
+  max-height: none;
+  height: 680px;
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  border: 1px solid var(--border-color);
+}
+
+.nav-screen-layout.expanded-mode .iphone-status-bar,
+.nav-screen-layout.expanded-mode .dynamic-island,
+.nav-screen-layout.expanded-mode .iphone-home-bar {
+  display: none;
+}
+
+.nav-screen-layout.expanded-mode .weather-pill {
+  top: 18px;
+  left: 18px;
+}
+
+

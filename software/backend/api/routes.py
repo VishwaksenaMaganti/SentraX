@@ -598,12 +598,39 @@ def list_potholes(limit: int = Query(50, ge=1, le=200)):
 @router.get("/route-health")
 def default_route_health():
     req = RouteHealthRequest()
-    return route_service.calculate_route_health(req)
+    tele = simulator_instance.telemetry if simulator_instance else None
+    return route_service.calculate_route_health(req, live_telemetry=tele)
 
 
 @router.post("/route-health")
 def compute_route_health(req: RouteHealthRequest):
-    return route_service.calculate_route_health(req)
+    tele = simulator_instance.telemetry if simulator_instance else None
+    return route_service.calculate_route_health(req, live_telemetry=tele)
+
+
+@router.get("/maps/config")
+def get_maps_config():
+    api_key = route_service.google_api_key
+    has_key = bool(api_key and not api_key.startswith("mock") and len(api_key) > 10)
+    return {
+        "google_maps_configured": has_key,
+        "api_key_masked": (api_key[:4] + "..." + api_key[-4:]) if has_key else "",
+        "default_origin": "Woxsen North Roundabout",
+        "default_destination": "Woxsen Hostels & Blue Embers",
+        "origin_coords": [17.6638, 77.9272],
+        "dest_coords": [17.6596, 77.9248]
+    }
+
+
+@router.post("/maps/config")
+def update_maps_config(key: str = Body(..., embed=True)):
+    route_service.set_api_key(key)
+    has_key = bool(key and not key.startswith("mock") and len(key) > 10)
+    return {
+        "status": "updated",
+        "google_maps_configured": has_key,
+        "api_key_masked": (key[:4] + "..." + key[-4:]) if has_key else ""
+    }
 
 
 # =====================================================================

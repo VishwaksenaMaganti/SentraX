@@ -142,8 +142,18 @@ function switchTab(tabId) {
         if (titleEl) titleEl.textContent = targetPage.getAttribute('data-title') || 'Command Center';
     }
 
-    if (tabId === 'navigation' && state.map) {
-        setTimeout(() => state.map.invalidateSize(), 200);
+    if (tabId === 'navigation') {
+        setTimeout(() => {
+            if (typeof navState !== 'undefined' && navState.isGoogleActive && navState.googleMap) {
+                google.maps.event.trigger(navState.googleMap, 'resize');
+                if (navState.bounds) navState.googleMap.fitBounds(navState.bounds);
+            } else if (typeof navState !== 'undefined' && navState.leafletMap) {
+                navState.leafletMap.invalidateSize();
+                if (navState.polylineLayer) navState.leafletMap.fitBounds(navState.polylineLayer.getBounds(), { padding: [35, 35] });
+            } else if (state.map && typeof state.map.invalidateSize === 'function') {
+                state.map.invalidateSize();
+            }
+        }, 200);
     }
 }
 
@@ -242,12 +252,14 @@ function updateTelemetryUI(t) {
 
         updateChartsStream(t);
         updateAerialTwinUI(t);
+        updateNavigationScreenTelemetry(t);
 
     } else {
         const reason = (t.risk_reasons && t.risk_reasons.length > 0)
             ? t.risk_reasons[0]
             : 'Awaiting connection of ESP32 Core Controller.';
         resetDashboardToStandby(reason);
+        updateNavigationScreenTelemetry(t);
     }
 }
 
@@ -453,26 +465,371 @@ function updateChartsStream(t) {
     }
 }
 
-// Leaflet Map Initialization
+// =====================================================================
+// GOOGLE MAPS PLATFORM & IN-CAR NAVIGATION SYSTEM
+// (Exact replica of mobile navigation interface with live hardware sensors)
+// =====================================================================
+
+// Source: Google Maps Platform Code Assist
+let navState = {
+    googleMap: null,
+    leafletMap: null,
+    isGoogleActive: false,
+    googleKey: '',
+    polylineLayer: null,
+    markersLayer: null,
+    currentLayerMode: 'dark', // 'dark' or 'satellite'
+    routeData: null,
+    startCoords: [17.6638, 77.9272],
+    destCoords: [17.6596, 77.9248]
+};
+
 function initMap() {
-    const mapEl = document.getElementById('sentrax-map');
-    if (!mapEl || typeof L === 'undefined') return;
+    initNavigationMap();
+}
 
-    state.map = L.map('sentrax-map').setView([12.9716, 77.6200], 13);
+function initNavigationMap() {
+    const mapContainer = document.getElementById('sentrax-nav-map');
+    if (!mapContainer) return;
 
+    // 1. Start Live Clock on iPhone Status Bar
+    function updateClock() {
+        const now = new Date();
+        let hours = now.getHours();
+        let minutes = now.getMinutes();
+        const str = `${hours}:${minutes < 10 ? '0' : ''}${minutes}`;
+        const clockEl = document.getElementById('nav-live-clock');
+        if (clockEl) clockEl.textContent = str;
+    }
+    updateClock();
+    setInterval(updateClock, 30000);
+
+    // 2. Setup Route Presets & Controls
+    setupNavControls();
+
+    // 3. Check for Google Maps API Key
+    checkAndInitGoogleMaps();
+}
+
+async function checkAndInitGoogleMaps() {
+    const mapContainer = document.getElementById('sentrax-nav-map');
+    if (!mapContainer) return;
+
+    // Check backend and localStorage for API key
+    let apiKey = localStorage.getItem('sentrax_gmaps_key') || '';
+    try {
+        const cfgRes = await fetch('/api/maps/config');
+        const cfg = await cfgRes.json();
+        if (cfg.google_maps_configured && !apiKey) {
+            apiKey = 'BACKEND_CONFIGURED';
+        }
+        if (cfg.origin_coords) navState.startCoords = cfg.origin_coords;
+        if (cfg.dest_coords) navState.destCoords = cfg.dest_coords;
+    } catch (e) {
+        console.warn('Could not reach /api/maps/config:', e);
+    }
+
+    if (apiKey && apiKey !== 'BACKEND_CONFIGURED' && apiKey.length > 10) {
+        loadGoogleMapsScript(apiKey);
+    } else {
+        // Fall back seamlessly to high-fidelity dark navigation map
+        initLeafletNavMap();
+        loadRouteHealth();
+    }
+}
+
+function loadGoogleMapsScript(apiKey) {
+    if (window.google && window.google.maps) {
+        initGoogleMapInstance(apiKey);
+        return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&libraries=places,routes,geometry`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+        console.log('[Google Maps] Maps JavaScript API loaded successfully');
+        initGoogleMapInstance(apiKey);
+    };
+    script.onerror = () => {
+        console.warn('[Google Maps] Failed to load with provided key, using interactive dark fallback');
+        initLeafletNavMap();
+        loadRouteHealth();
+    };
+    document.head.appendChild(script);
+}
+
+function initGoogleMapInstance(apiKey) {
+    const mapContainer = document.getElementById('sentrax-nav-map');
+    if (!mapContainer || !window.google || !window.google.maps) return;
+
+    try {
+        // Clear previous map if any
+        mapContainer.innerHTML = '';
+
+        const mapOptions = {
+            center: { lat: 17.6618, lng: 77.9260 },
+            zoom: 17,
+            mapId: 'DEMO_MAP_ID', // Mandatory for AdvancedMarkerElement
+            disableDefaultUI: true,
+            zoomControl: false,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+            // Mandatory Google Maps Platform usage attribution
+            internalUsageAttributionIds: ['gmp_git_agentskills_v1'],
+            styles: [
+                { elementType: "geometry", stylers: [{ color: "#161b26" }] },
+                { elementType: "labels.text.stroke", stylers: [{ color: "#161b26" }] },
+                { elementType: "labels.text.fill", stylers: [{ color: "#748398" }] },
+                { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#9aa9be" }] },
+                { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#8a99ae" }] },
+                { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#13212f" }] },
+                { featureType: "road", elementType: "geometry", stylers: [{ color: "#232d3f" }] },
+                { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#1b2331" }] },
+                { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#2d3a52" }] },
+                { featureType: "transit", elementType: "geometry", stylers: [{ color: "#1c2433" }] },
+                { featureType: "water", elementType: "geometry", stylers: [{ color: "#0d131c" }] }
+            ]
+        };
+
+        navState.googleMap = new google.maps.Map(mapContainer, mapOptions);
+        navState.isGoogleActive = true;
+        state.map = navState.googleMap;
+
+        const badge = document.getElementById('nav-gmaps-badge');
+        if (badge) {
+            badge.textContent = 'Google Maps Platform Connected';
+            badge.style.background = 'rgba(16, 185, 129, 0.2)';
+            badge.style.color = '#34d399';
+            badge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        }
+
+        const statusText = document.getElementById('nav-gmaps-key-status');
+        if (statusText) {
+            statusText.textContent = 'Photorealistic Google Maps JavaScript API active with dark theme.';
+            statusText.style.color = '#34d399';
+        }
+
+        loadRouteHealth();
+    } catch (err) {
+        console.error('Error initializing Google Maps:', err);
+        initLeafletNavMap();
+        loadRouteHealth();
+    }
+}
+
+function initLeafletNavMap() {
+    const mapContainer = document.getElementById('sentrax-nav-map');
+    if (!mapContainer || typeof L === 'undefined') return;
+
+    if (navState.leafletMap) {
+        navState.leafletMap.remove();
+        navState.leafletMap = null;
+    }
+
+    mapContainer.innerHTML = '';
+    navState.leafletMap = L.map('sentrax-nav-map', {
+        zoomControl: false,
+        attributionControl: false
+    }).setView([17.6618, 77.9260], 17);
+
+    // Dark midnight navigation tiles matching reference design
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
         subdomains: 'abcd',
-        maxZoom: 19
-    }).addTo(state.map);
+        maxZoom: 20
+    }).addTo(navState.leafletMap);
 
-    loadRouteHealth();
+    state.map = navState.leafletMap;
+    navState.isGoogleActive = false;
+}
+
+function setupNavControls() {
+    // 1. Swap Locations button
+    const btnSwap = document.getElementById('btn-swap-locations');
+    if (btnSwap) {
+        btnSwap.addEventListener('click', () => {
+            const originInput = document.getElementById('nav-input-origin');
+            const destInput = document.getElementById('nav-input-dest');
+            if (originInput && destInput) {
+                const tmp = originInput.value;
+                originInput.value = destInput.value;
+                destInput.value = tmp;
+
+                const tmpCoords = navState.startCoords;
+                navState.startCoords = navState.destCoords;
+                navState.destCoords = tmpCoords;
+
+                loadRouteHealth();
+            }
+        });
+    }
+
+    // 2. Recompute Route button
+    const btnRecompute = document.getElementById('btn-recompute-route');
+    if (btnRecompute) {
+        btnRecompute.addEventListener('click', () => {
+            loadRouteHealth();
+        });
+    }
+
+    // 3. Quick Route Presets
+    document.querySelectorAll('.nav-preset-pill').forEach(pill => {
+        pill.addEventListener('click', (e) => {
+            document.querySelectorAll('.nav-preset-pill').forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+
+            const preset = pill.getAttribute('data-preset');
+            const originInput = document.getElementById('nav-input-origin');
+            const destInput = document.getElementById('nav-input-dest');
+
+            if (preset === 'woxsen-campus') {
+                if (originInput) originInput.value = 'Woxsen North Roundabout';
+                if (destInput) destInput.value = 'Woxsen Hostels & Blue Embers';
+                navState.startCoords = [17.6638, 77.9272];
+                navState.destCoords = [17.6596, 77.9248];
+            } else if (preset === 'woxsen-gate') {
+                if (originInput) originInput.value = 'Woxsen Main Entrance';
+                if (destInput) destInput.value = 'Academic Block Spine';
+                navState.startCoords = [17.6582, 77.9268];
+                navState.destCoords = [17.6620, 77.9270];
+            } else if (preset === 'corridor-test') {
+                if (originInput) originInput.value = 'Sensor Track (US1 / Entry)';
+                if (destInput) destInput.value = 'Sensor Track (IR4 / Exit)';
+                navState.startCoords = [17.6640, 77.9274];
+                navState.destCoords = [17.6590, 77.9245];
+            }
+            loadRouteHealth();
+        });
+    });
+
+    // 4. Floating Action Buttons (Layers, Center, Compass)
+    const btnLayers = document.getElementById('btn-map-layers');
+    if (btnLayers) {
+        btnLayers.addEventListener('click', () => {
+            if (navState.isGoogleActive && navState.googleMap) {
+                const currentType = navState.googleMap.getMapTypeId();
+                const nextType = (currentType === 'satellite') ? 'roadmap' : 'satellite';
+                navState.googleMap.setMapTypeId(nextType);
+            } else if (navState.leafletMap) {
+                // Toggle between dark and standard OSM
+                if (navState.currentLayerMode === 'dark') {
+                    navState.currentLayerMode = 'satellite';
+                    if (navState.satelliteTile) navState.leafletMap.removeLayer(navState.satelliteTile);
+                    navState.satelliteTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(navState.leafletMap);
+                } else {
+                    navState.currentLayerMode = 'dark';
+                    if (navState.satelliteTile) {
+                        navState.leafletMap.removeLayer(navState.satelliteTile);
+                        navState.satelliteTile = null;
+                    }
+                }
+            }
+        });
+    }
+
+    const btnCar = document.getElementById('btn-map-car');
+    if (btnCar) {
+        btnCar.addEventListener('click', () => {
+            const centerPt = navState.destCoords;
+            if (navState.isGoogleActive && navState.googleMap) {
+                navState.googleMap.panTo({ lat: centerPt[0], lng: centerPt[1] });
+                navState.googleMap.setZoom(18);
+            } else if (navState.leafletMap) {
+                navState.leafletMap.setView(centerPt, 18, { animate: true });
+            }
+        });
+    }
+
+    const btnCompass = document.getElementById('btn-map-compass');
+    if (btnCompass) {
+        btnCompass.addEventListener('click', () => {
+            if (navState.isGoogleActive && navState.googleMap && navState.bounds) {
+                navState.googleMap.fitBounds(navState.bounds);
+            } else if (navState.leafletMap && navState.polylineLayer) {
+                navState.leafletMap.fitBounds(navState.polylineLayer.getBounds(), { padding: [40, 40] });
+            }
+        });
+    }
+
+    // 5. Drawer Toggle & Close
+    const btnClose = document.getElementById('btn-close-directions');
+    const drawerHandle = document.getElementById('nav-drawer-toggle');
+    const drawer = document.getElementById('nav-bottom-drawer');
+    if (drawer) {
+        const toggleDrawer = () => {
+            drawer.classList.toggle('minimized');
+            if (drawer.classList.contains('minimized')) {
+                drawer.style.maxHeight = '75px';
+            } else {
+                drawer.style.maxHeight = '52%';
+            }
+        };
+        if (btnClose) btnClose.addEventListener('click', toggleDrawer);
+        if (drawerHandle) drawerHandle.addEventListener('click', toggleDrawer);
+    }
+
+    // 6. Cockpit View Toggle
+    const btnExpand = document.getElementById('btn-toggle-expanded-view');
+    const layoutWrapper = document.getElementById('nav-layout-wrapper');
+    if (btnExpand && layoutWrapper) {
+        btnExpand.addEventListener('click', () => {
+            layoutWrapper.classList.toggle('expanded-mode');
+            btnExpand.textContent = layoutWrapper.classList.contains('expanded-mode') ? 'Show Phone Frame' : 'Toggle Cockpit View';
+            setTimeout(() => {
+                if (navState.isGoogleActive && navState.googleMap) {
+                    google.maps.event.trigger(navState.googleMap, 'resize');
+                } else if (navState.leafletMap) {
+                    navState.leafletMap.invalidateSize();
+                }
+            }, 300);
+        });
+    }
+
+    // 7. Save Google Maps Key button
+    const btnSaveKey = document.getElementById('btn-save-gmaps-key');
+    const keyInput = document.getElementById('nav-gmaps-key-input');
+    if (btnSaveKey && keyInput) {
+        btnSaveKey.addEventListener('click', async () => {
+            const key = keyInput.value.trim();
+            if (!key) return;
+
+            localStorage.setItem('sentrax_gmaps_key', key);
+            try {
+                await fetch('/api/maps/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key })
+                });
+            } catch (e) {
+                console.warn('Could not post key to /api/maps/config:', e);
+            }
+
+            loadGoogleMapsScript(key);
+        });
+    }
 }
 
 async function loadRouteHealth() {
+    const origin = document.getElementById('nav-input-origin')?.value || 'Woxsen North Roundabout';
+    const destination = document.getElementById('nav-input-dest')?.value || 'Woxsen Hostels & Blue Embers';
+
     try {
-        const res = await fetch('/api/route-health');
+        const res = await fetch('/api/route-health', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                origin,
+                destination,
+                origin_lat: navState.startCoords[0],
+                origin_lng: navState.startCoords[1],
+                dest_lat: navState.destCoords[0],
+                dest_lng: navState.destCoords[1]
+            })
+        });
         const data = await res.json();
+        navState.routeData = data;
         renderRouteOnMap(data);
     } catch (err) {
         console.error('Failed to load route health:', err);
@@ -480,40 +837,252 @@ async function loadRouteHealth() {
 }
 
 function renderRouteOnMap(routeData) {
-    if (!state.map || !routeData.segments) return;
+    if (!routeData) return;
 
-    if (state.routeLayer) {
-        state.map.removeLayer(state.routeLayer);
+    const coords = routeData.route_polyline_points || [
+        [17.6644, 77.9273],
+        [17.6636, 77.9272],
+        [17.6620, 77.9271],
+        [17.6607, 77.9255],
+        [17.6597, 77.9249],
+        [17.6594, 77.9248]
+    ];
+
+    // ==========================================
+    // RENDER ON GOOGLE MAPS PLATFORM
+    // ==========================================
+    if (navState.isGoogleActive && navState.googleMap && window.google) {
+        // Clear old overlays
+        if (navState.googlePolyline) navState.googlePolyline.setMap(null);
+        if (navState.googleMarkers) {
+            navState.googleMarkers.forEach(m => m.setMap(null));
+        }
+        navState.googleMarkers = [];
+
+        const gCoords = coords.map(pt => ({ lat: pt[0], lng: pt[1] }));
+
+        // Vibrant electric blue polyline with white directional chevrons matching reference
+        navState.googlePolyline = new google.maps.Polyline({
+            path: gCoords,
+            geodesic: true,
+            strokeColor: '#2F80ED',
+            strokeOpacity: 0.95,
+            strokeWeight: 7,
+            icons: [{
+                icon: {
+                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                    scale: 2.2,
+                    strokeColor: '#FFFFFF',
+                    fillColor: '#FFFFFF',
+                    fillOpacity: 0.9
+                },
+                offset: '20%',
+                repeat: '65px'
+            }]
+        });
+        navState.googlePolyline.setMap(navState.googleMap);
+
+        // Fit Bounds
+        const bounds = new google.maps.LatLngBounds();
+        gCoords.forEach(pt => bounds.extend(pt));
+        navState.bounds = bounds;
+        navState.googleMap.fitBounds(bounds);
+
+        // Origin Marker (Start)
+        const startMarker = new google.maps.Marker({
+            position: gCoords[0],
+            map: navState.googleMap,
+            title: routeData.origin_name,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: '#10B981',
+                fillOpacity: 1,
+                strokeColor: '#FFFFFF',
+                strokeWeight: 2.5
+            }
+        });
+        navState.googleMarkers.push(startMarker);
+
+        // Destination Marker (End)
+        const endMarker = new google.maps.Marker({
+            position: gCoords[gCoords.length - 1],
+            map: navState.googleMap,
+            title: routeData.destination_name,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 9,
+                fillColor: '#EF4444',
+                fillOpacity: 1,
+                strokeColor: '#FFFFFF',
+                strokeWeight: 3
+            }
+        });
+        navState.googleMarkers.push(endMarker);
     }
 
-    state.routeLayer = L.featureGroup().addTo(state.map);
+    // ==========================================
+    // RENDER ON LEAFLET DARK VECTOR FALLBACK
+    // ==========================================
+    else if (navState.leafletMap) {
+        if (navState.polylineLayer) {
+            navState.leafletMap.removeLayer(navState.polylineLayer);
+        }
+        if (navState.markersLayer) {
+            navState.leafletMap.removeLayer(navState.markersLayer);
+        }
 
-    routeData.segments.forEach(seg => {
-        const polyline = L.polyline([
-            [seg.start_lat, seg.start_lng],
-            [seg.end_lat, seg.end_lng]
-        ], {
-            color: seg.color_hex,
+        // Draw glowing blue route polyline with matching aesthetic
+        navState.polylineLayer = L.polyline(coords, {
+            color: '#2F80ED',
             weight: 7,
-            opacity: 0.85
-        }).addTo(state.routeLayer);
+            opacity: 0.95,
+            lineJoin: 'round',
+            lineCap: 'round'
+        }).addTo(navState.leafletMap);
 
-        polyline.bindPopup(`
-            <strong>${seg.name}</strong><br>
-            Health Score: <b>${seg.health_score}/100 (${seg.health_band})</b><br>
-            Recommended Speed: <b>${seg.recommended_speed_kmh} km/h</b><br>
-            Potholes: ${seg.pothole_count} | Collisions: ${seg.collision_count}
-        `);
-    });
+        navState.markersLayer = L.featureGroup().addTo(navState.leafletMap);
 
-    state.map.fitBounds(state.routeLayer.getBounds(), { padding: [30, 30] });
+        // Start Beacon Marker (Green)
+        const startIcon = L.divIcon({
+            className: 'custom-beacon',
+            html: `<div style="width:16px;height:16px;border-radius:50%;background:#10B981;border:2.5px solid #FFFFFF;box-shadow:0 0 12px #10B981;"></div>`,
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+        });
+        L.marker(coords[0], { icon: startIcon }).addTo(navState.markersLayer);
 
-    setText('route-health-score', `${routeData.overall_health_score} / 100`);
-    setText('route-health-band', routeData.overall_health_band);
-    setText('route-advisory-speed', `${routeData.recommended_speed_kmh} km/h`);
-    setText('route-potholes', routeData.pothole_count);
-    setText('route-collisions', routeData.collision_zones_count);
-    setText('route-transit-rec', routeData.vehicle_type_recommendation);
+        // End Beacon Marker (Red)
+        const endIcon = L.divIcon({
+            className: 'custom-beacon',
+            html: `<div style="width:18px;height:18px;border-radius:50%;background:#EF4444;border:3px solid #FFFFFF;box-shadow:0 0 14px #EF4444;"></div>`,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9]
+        });
+        L.marker(coords[coords.length - 1], { icon: endIcon }).addTo(navState.markersLayer);
+
+        // Landmark labels matching screenshot: Woxsen Hostels & Blue Embers
+        const hostelIcon = L.divIcon({
+            className: 'poi-pill',
+            html: `<div style="background:rgba(26,31,44,0.9);color:#e2e8f0;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;border:1px solid rgba(255,255,255,0.15);white-space:nowrap;display:flex;align-items:center;gap:4px;"><span style="color:#a855f7;">🛏️</span> Woxsen Hostels</div>`,
+            iconAnchor: [45, 10]
+        });
+        L.marker([17.6607, 77.9255], { icon: hostelIcon }).addTo(navState.markersLayer);
+
+        const emberIcon = L.divIcon({
+            className: 'poi-pill',
+            html: `<div style="background:rgba(26,31,44,0.9);color:#e2e8f0;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;border:1px solid rgba(255,255,255,0.15);white-space:nowrap;display:flex;align-items:center;gap:4px;"><span style="color:#f97316;">🍽️</span> Blue Embers</div>`,
+            iconAnchor: [45, 10]
+        });
+        L.marker([17.6598, 77.9249], { icon: emberIcon }).addTo(navState.markersLayer);
+
+        navState.leafletMap.fitBounds(navState.polylineLayer.getBounds(), { padding: [35, 35] });
+    }
+
+    // ==========================================
+    // UPDATE DRAWER METRIC CARDS
+    // ==========================================
+    const healthScore = routeData.overall_health_score !== undefined ? routeData.overall_health_score : 68;
+    const healthBand = routeData.overall_health_band || 'Fair';
+    setText('nav-road-health-val', `${healthScore}% (${healthBand})`);
+
+    const healthBar = document.getElementById('nav-road-health-bar');
+    if (healthBar) {
+        healthBar.style.width = `${healthScore}%`;
+        if (healthScore >= 80) {
+            healthBar.style.background = 'linear-gradient(90deg, #10B981, #34D399)';
+        } else if (healthScore >= 60) {
+            healthBar.style.background = 'linear-gradient(90deg, #F59E0B, #EAB308)';
+        } else {
+            healthBar.style.background = 'linear-gradient(90deg, #EF4444, #F87171)';
+        }
+    }
+
+    const recSpeed = Math.round(routeData.recommended_speed_kmh || 80);
+    setText('nav-sign-limit-val', recSpeed);
+    setText('nav-speed-rec-badge', `LIMIT: ${recSpeed} km/h`);
+
+    setText('nav-road-anatomy-val', routeData.road_anatomy_text || 'Surface: Asphalt | Lanes: 2 | Shoulder: Concrete');
+
+    if (routeData.measured_speed_kmh !== undefined) {
+        setText('nav-current-speed', routeData.measured_speed_kmh.toFixed(1));
+    }
+
+    setText('nav-route-dist-eta', `${routeData.total_distance_km} km | ${routeData.estimated_duration_mins} mins`);
+
+    if (routeData.weather_temp_c !== undefined) {
+        setText('nav-weather-temp', Math.round(routeData.weather_temp_c));
+    }
+    if (routeData.weather_aqi !== undefined) {
+        setText('nav-weather-aqi', routeData.weather_aqi);
+    }
+}
+
+// Live telemetry link from hardware (WebSocket event)
+function updateNavigationScreenTelemetry(t) {
+    if (!t) return;
+
+    // 1. Live Weather Pill Temperature (DHT11 sensor)
+    if (t.temperature_c !== undefined && !isNaN(t.temperature_c)) {
+        setText('nav-weather-temp', Math.round(t.temperature_c));
+    }
+
+    // 2. Measured Vehicle Speed (Ultrasonic Sensors)
+    if (t.measured_speed_kmh !== undefined) {
+        setText('nav-current-speed', t.measured_speed_kmh.toFixed(1));
+    }
+
+    // 3. Recommended Speed Limit & Anatomy Sign
+    const recSpeed = Math.round(t.recommended_speed_kmh || 80);
+    setText('nav-sign-limit-val', recSpeed);
+    setText('nav-speed-rec-badge', `LIMIT: ${recSpeed} km/h`);
+
+    // 4. Dynamic Road Health computation from live hardware sensors
+    let health = 84;
+    let band = 'Good';
+    let isWet = (t.road_condition === 'WET' || (t.moisture_raw !== undefined && t.moisture_raw < 2000));
+    let isCongested = (t.traffic_level === 'CONGESTED');
+    let isStalled = Boolean(t.stalled_vehicle);
+    let isCollision = Boolean(t.collision);
+
+    let anatomy = 'Surface: Asphalt | Lanes: 2 | Shoulder: Concrete';
+
+    if (isCollision) {
+        health = 28;
+        band = 'Critical';
+        anatomy = 'Surface: Impact Zone | Obstruction Ahead';
+    } else if (isStalled) {
+        health = 52;
+        band = 'Poor';
+        anatomy = 'Surface: Asphalt | Stationary Vehicle on Lane';
+    } else if (isWet) {
+        health = 68; // Exactly matches reference image: 68% (Fair)
+        band = 'Fair';
+        anatomy = 'Surface: Wet Asphalt | Lanes: 2 | Low Friction';
+    } else if (isCongested) {
+        health = 64;
+        band = 'Fair';
+        anatomy = 'Surface: Asphalt | Dense Traffic Queue';
+    } else {
+        health = 88;
+        band = 'Good';
+        anatomy = 'Surface: Asphalt | Lanes: 2 | Shoulder: Concrete';
+    }
+
+    setText('nav-road-health-val', `${health}% (${band})`);
+    const bar = document.getElementById('nav-road-health-bar');
+    if (bar) {
+        bar.style.width = `${health}%`;
+        if (health >= 80) {
+            bar.style.background = 'linear-gradient(90deg, #10B981, #34D399)';
+        } else if (health >= 60) {
+            bar.style.background = 'linear-gradient(90deg, #F59E0B, #EAB308)';
+        } else {
+            bar.style.background = 'linear-gradient(90deg, #EF4444, #F87171)';
+        }
+    }
+
+    setText('nav-road-anatomy-val', anatomy);
 }
 
 // Initial Data Fetch

@@ -31,12 +31,12 @@ class RoadSegment(BaseModel):
 
 
 class RouteHealthRequest(BaseModel):
-    origin: str = "Majestic, Bengaluru"
-    destination: str = "Whitefield, Bengaluru"
-    origin_lat: Optional[float] = 12.9767
-    origin_lng: Optional[float] = 77.5713
-    dest_lat: Optional[float] = 12.9698
-    dest_lng: Optional[float] = 77.7500
+    origin: str = "Woxsen North Roundabout"
+    destination: str = "Woxsen Hostels & Blue Embers"
+    origin_lat: Optional[float] = 17.6638
+    origin_lng: Optional[float] = 77.9272
+    dest_lat: Optional[float] = 17.6596
+    dest_lng: Optional[float] = 77.9248
     prefer_safest: bool = True
 
 
@@ -44,6 +44,8 @@ class RouteHealthResponse(BaseModel):
     session_id: str = Field(default_factory=lambda: f"rt_{uuid.uuid4().hex[:8]}")
     origin_name: str
     destination_name: str
+    origin_coords: List[float] = Field(default_factory=lambda: [17.6638, 77.9272])
+    dest_coords: List[float] = Field(default_factory=lambda: [17.6596, 77.9248])
     total_distance_km: float
     estimated_duration_mins: float
     overall_health_score: int  # 0 to 100
@@ -51,6 +53,13 @@ class RouteHealthResponse(BaseModel):
     overall_risk_score: int
     recommended_speed_kmh: float
     posted_speed_kmh: float = 80.0
+    measured_speed_kmh: float = 0.0
+    road_anatomy_text: str = "Surface: Asphalt | Lanes: 2 | Shoulder: Concrete"
+    road_surface_status: str = "Dry Asphalt"
+    sensor_situation_summary: str = "Corridor Clear | Normal Operations"
+    weather_temp_c: float = 26.0
+    weather_aqi: int = 72
+    google_maps_configured: bool = False
     pothole_count: int
     collision_zones_count: int
     wet_sections_count: int
