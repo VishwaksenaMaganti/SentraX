@@ -88,7 +88,17 @@
             <div class="header-left">
                 <div class="page-title" id="current-page-title">Command Center</div>
             </div>
-            <div class="header-right" style="display:flex; align-items:center; gap:10px;">
+            <div class="header-right" style="display:flex; align-items:center; gap:8px;">
+                <!-- Detection Mode Switcher (Section 31: FUSION, SENSOR, CAMERA) -->
+                <div class="mode-pill-group" style="display:flex; background:rgba(255,255,255,0.06); border:1px solid var(--border-color); border-radius:6px; overflow:hidden;">
+                    <button class="btn-mode active" id="btn-mode-fusion" data-mode="FUSION" style="padding:5px 10px; font-size:11px; font-weight:700; background:#2563eb; color:#fff; border:none; cursor:pointer;">FUSION MODE</button>
+                    <button class="btn-mode" id="btn-mode-sensor" data-mode="SENSOR" style="padding:5px 10px; font-size:11px; font-weight:700; background:transparent; color:var(--text-secondary); border:none; cursor:pointer;">SENSOR MODE</button>
+                    <button class="btn-mode" id="btn-mode-camera" data-mode="CAMERA" style="padding:5px 10px; font-size:11px; font-weight:700; background:transparent; color:var(--text-secondary); border:none; cursor:pointer;">CAMERA MODE</button>
+                </div>
+                <!-- Demo Stalled Timer Toggle (Section 34: 5s demo vs 15s prod) -->
+                <button class="btn btn-outline" id="btn-toggle-demo-stall" title="Toggle 5s Demo vs 15s Production Stalled Vehicle Timer" style="font-size:11px; font-weight:700; color:var(--accent-amber); padding:5px 10px;">
+                    ⏱️ DEMO: 5s STALL
+                </button>
                 <!-- ESP32 Pairing Button Pill -->
                 <button class="btn-hw-pill disconnected" id="btn-menu-esp32" title="Click to open ESP32 Gateway Pairing Menu">
                     <span class="status-indicator-dot red" id="dot-esp32"></span>
@@ -111,9 +121,9 @@
                 <div class="standby-gate-icon">
                     <svg width="40" height="40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                 </div>
-                <h2 class="standby-gate-title">SENTRAX HARDWARE PAIRING GATE</h2>
+                <h2 class="standby-gate-title">SENTRAX MULTI-MODAL GATEWAY</h2>
                 <p class="standby-gate-desc">
-                    Simulation mode has been disabled. Connect your <b>ESP32 Core Road Controller</b> via Bluetooth or USB COM port to arm the system and view live telemetry.
+                    Connect your physical <b>ESP32 Core Road Controller</b>, switch to <b>CAMERA MODE</b> to test Phone Camera vision independently, or run the <b>Interactive Test Deck</b>.
                 </p>
                 <div class="standby-modules-grid" style="display:flex; justify-content:center; max-width:460px; margin:0 auto;">
                     <!-- Module: ESP32 -->
@@ -128,13 +138,18 @@
                             <div class="subsystem-line">✓ Sound Acoustic Sensor & Rain Moisture</div>
                             <div class="subsystem-line">✓ WS2812B Dynamic LEDs & E-Ink Sign</div>
                         </div>
-                        <button class="btn btn-primary btn-block" id="btn-open-esp32-modal" style="background:#2563eb; color:#fff; font-weight:700;">
-                            PAIR ESP32 GATEWAY
-                        </button>
+                        <div style="display:flex; gap:8px; margin-top:10px;">
+                            <button class="btn btn-primary" id="btn-open-esp32-modal" style="flex:1; background:#2563eb; color:#fff; font-weight:700;">
+                                PAIR ESP32 GATEWAY
+                            </button>
+                            <button class="btn btn-outline" id="btn-bypass-standby" style="flex:1; color:var(--accent-cyan); border-color:var(--accent-cyan); font-weight:700;">
+                                USE CAMERA / DEMO
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="standby-gate-footer">
-                    <span id="standby-summary-text">Waiting for ESP32 Core Controller... Connect via Bluetooth LE or USB COM to unlock live system.</span>
+                    <span id="standby-summary-text">Waiting for ESP32 Core Controller... Or click 'USE CAMERA / DEMO' to inspect vision perception.</span>
                 </div>
             </div>
         </div>
@@ -144,6 +159,21 @@
         <!-- ========================================== -->
         <div class="page-container active" id="page-command-center" data-title="Command Center">
             <div class="dashboard-grid">
+                <!-- Real-Time Corridor Incident Alert Banner -->
+                <div class="live-incident-banner clear" id="live-incident-alert-banner" style="grid-column: span 12;">
+                    <div class="incident-banner-left">
+                        <span class="incident-banner-icon" id="incident-banner-icon">🛡️</span>
+                        <div>
+                            <div class="incident-banner-title" id="incident-banner-title">CORRIDOR STATUS: NORMAL &amp; CLEAR</div>
+                            <div class="incident-banner-desc" id="incident-banner-desc">Physical sensors and camera perception reporting all clear. No active collisions, stalled vehicles, or hazards.</div>
+                        </div>
+                    </div>
+                    <div class="incident-banner-actions">
+                        <span class="incident-banner-badge" id="incident-banner-badge">ALL CLEAR</span>
+                        <button class="btn btn-outline" id="btn-banner-inspect-audit" style="display:none; font-size:11px; padding:4px 10px; color:var(--accent-cyan); border-color:var(--accent-cyan); font-weight:700;">🔍 Forensic Audit</button>
+                    </div>
+                </div>
+
                 <!-- Current Measured Speed -->
                 <div class="card" style="grid-column: span 3;">
                     <div class="card-header">
@@ -234,6 +264,166 @@
                     <ul id="risk-reasons-list" style="margin-left: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
                         <li>Road clear and dry (Baseline)</li>
                     </ul>
+                </div>
+
+                <!-- Live Sensor-Camera Fusion Matrix (Section 17 & 18) -->
+                <div class="card" style="grid-column: span 12;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <span class="card-title">Live Sensor-Camera Fusion Table</span>
+                            <span class="badge" id="badge-fusion-mode-label" style="margin-left:8px; background:rgba(37,99,235,0.2); color:#60a5fa; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700;">MODE: FUSION</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:12px; color:var(--text-secondary);">Correlation Window: <b>±3.0s</b></span>
+                            <button class="btn btn-outline" id="btn-inspect-latest-decision" style="font-size:11px; padding:4px 10px; color:var(--accent-cyan); border-color:var(--accent-cyan); font-weight:700;">
+                                🔍 Forensic Decision Audit (Sec 58)
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container" style="overflow-x:auto; margin-top:12px;">
+                        <table class="data-table" style="width:100%; text-align:left; border-collapse:collapse;" id="table-fusion-matrix">
+                            <thead>
+                                <tr style="border-bottom:1px solid var(--border-color); color:var(--text-muted); font-size:12px;">
+                                    <th style="padding:10px 14px;">EVENT</th>
+                                    <th style="padding:10px 14px;">PHYSICAL SENSOR</th>
+                                    <th style="padding:10px 14px;">CAMERA COMPUTER VISION</th>
+                                    <th style="padding:10px 14px;">FINAL SENTRAX STATE</th>
+                                    <th style="padding:10px 14px;">CONFIDENCE</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-fusion-matrix">
+                                <!-- Populated dynamically from /api/fusion/table -->
+                                <tr>
+                                    <td style="padding:12px 14px; font-weight:700;">Vehicle Speed</td>
+                                    <td style="padding:12px 14px;" id="cell-f-speed-sensor">--</td>
+                                    <td style="padding:12px 14px;" id="cell-f-speed-cam">--</td>
+                                    <td style="padding:12px 14px;" id="cell-f-speed-final">--</td>
+                                    <td style="padding:12px 14px;" id="cell-f-speed-conf">--</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px; font-weight:700;">Stalled Vehicle</td>
+                                    <td style="padding:12px 14px;" id="cell-f-stall-sensor">NO</td>
+                                    <td style="padding:12px 14px;" id="cell-f-stall-cam">NO</td>
+                                    <td style="padding:12px 14px;" id="cell-f-stall-final"><span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; padding:2px 8px; border-radius:4px;">CLEAR</span></td>
+                                    <td style="padding:12px 14px;" id="cell-f-stall-conf">--</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px; font-weight:700;">Wrong Way</td>
+                                    <td style="padding:12px 14px;" id="cell-f-ww-sensor">NO</td>
+                                    <td style="padding:12px 14px;" id="cell-f-ww-cam">NO</td>
+                                    <td style="padding:12px 14px;" id="cell-f-ww-final"><span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; padding:2px 8px; border-radius:4px;">CLEAR</span></td>
+                                    <td style="padding:12px 14px;" id="cell-f-ww-conf">--</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px; font-weight:700;">Collision</td>
+                                    <td style="padding:12px 14px;" id="cell-f-col-sensor">NO</td>
+                                    <td style="padding:12px 14px;" id="cell-f-col-cam">NO</td>
+                                    <td style="padding:12px 14px;" id="cell-f-col-final"><span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; padding:2px 8px; border-radius:4px;">CLEAR</span></td>
+                                    <td style="padding:12px 14px;" id="cell-f-col-conf">--</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px; font-weight:700;">Wet Road</td>
+                                    <td style="padding:12px 14px;" id="cell-f-wet-sensor">NO</td>
+                                    <td style="padding:12px 14px;" id="cell-f-wet-cam">N/A (PHYSICAL MEASUREMENT)</td>
+                                    <td style="padding:12px 14px;" id="cell-f-wet-final"><span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; padding:2px 8px; border-radius:4px;">DRY</span></td>
+                                    <td style="padding:12px 14px;" id="cell-f-wet-conf">--</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px; font-weight:700;">Pothole Defect</td>
+                                    <td style="padding:12px 14px;" id="cell-f-pot-sensor">N/A</td>
+                                    <td style="padding:12px 14px;" id="cell-f-pot-cam">NO</td>
+                                    <td style="padding:12px 14px;" id="cell-f-pot-final"><span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; padding:2px 8px; border-radius:4px;">CLEAR</span></td>
+                                    <td style="padding:12px 14px;" id="cell-f-pot-conf">--</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px; font-weight:700;">Vehicle Toppled</td>
+                                    <td style="padding:12px 14px;" id="cell-f-top-sensor">N/A (VISUAL ONLY)</td>
+                                    <td style="padding:12px 14px;" id="cell-f-top-cam">NO</td>
+                                    <td style="padding:12px 14px;" id="cell-f-top-final"><span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; padding:2px 8px; border-radius:4px;">CLEAR</span></td>
+                                    <td style="padding:12px 14px;" id="cell-f-top-conf">--</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Compact Multi-Modal Scenario Controller & Test Suite -->
+                <div class="card" style="grid-column: span 12;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="card-title">Multi-Modal Scenario &amp; Prototype Verifier</span>
+                            <span class="badge" style="background:rgba(37,99,235,0.2); color:#60a5fa; font-size:11px; font-weight:700;">SUITE 1-14</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <button class="btn btn-outline" id="btn-toggle-scenario-drawer" style="font-size:11px; padding:4px 10px; color:var(--text-secondary);">
+                                ▾ Expand All 14 Test Cases
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Sleek Quick-Action Toolbar -->
+                    <div class="scenario-quick-bar" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-top:12px; padding:10px; background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:6px;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span style="font-size:12px; font-weight:700; color:var(--text-muted);">Quick Trigger:</span>
+                            <button class="btn btn-outline btn-test-case pill-btn" data-test="8" style="padding:5px 10px; font-size:11px; border-color:var(--status-critical); color:var(--status-critical); font-weight:700;">
+                                💥 Collision (T8)
+                            </button>
+                            <button class="btn btn-outline btn-test-case pill-btn" data-test="3" style="padding:5px 10px; font-size:11px; border-color:var(--accent-amber); color:var(--accent-amber); font-weight:700;">
+                                ⏱️ Stalled (T3)
+                            </button>
+                            <button class="btn btn-outline btn-test-case pill-btn" data-test="14" style="padding:5px 10px; font-size:11px; border-color:#f43f5e; color:#f43f5e; font-weight:700;">
+                                🔄 Toppled (T14)
+                            </button>
+                            <button class="btn btn-outline btn-test-case pill-btn" data-test="6" style="padding:5px 10px; font-size:11px; border-color:#e11d48; color:#e11d48; font-weight:700;">
+                                ⛔ Wrong-Way (T6)
+                            </button>
+                            <button class="btn btn-outline btn-test-case pill-btn" data-test="12" style="padding:5px 10px; font-size:11px; border-color:var(--accent-cyan); color:var(--accent-cyan); font-weight:700;">
+                                🌧️ Wet Road (T12)
+                            </button>
+                            <button class="btn btn-outline btn-test-case pill-btn" data-test="4" style="padding:5px 10px; font-size:11px; border-color:var(--accent-emerald); color:var(--accent-emerald); font-weight:700;">
+                                ✓ Clear/Reset (T4)
+                            </button>
+                        </div>
+
+                        <!-- Dropdown for all 14 scenarios -->
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <select id="select-scenario-picker" style="padding:6px 10px; background:var(--bg-secondary); border:1px solid var(--border-color); color:var(--text-primary); border-radius:4px; font-size:12px;">
+                                <option value="1">T1: Vehicle Confirmed</option>
+                                <option value="2">T2: Camera Stalled (5s)</option>
+                                <option value="3">T3: Stalled Confirmed</option>
+                                <option value="4">T4: Vehicle Moves (Reset)</option>
+                                <option value="5">T5: Camera Wrong-Way</option>
+                                <option value="6">T6: Wrong-Way Confirmed</option>
+                                <option value="7">T7: Possible Collision</option>
+                                <option value="8">T8: Collision Confirmed</option>
+                                <option value="9">T9: Sensor-Only Collision</option>
+                                <option value="10">T10: Camera-Only Collision</option>
+                                <option value="11">T11: Sensor/Cam Mismatch</option>
+                                <option value="12">T12: Sensor-Only Wet Road</option>
+                                <option value="13">T13: Camera-Only Pothole</option>
+                                <option value="14">T14: Vehicle Toppled Over</option>
+                            </select>
+                            <button class="btn btn-primary" id="btn-run-selected-scenario" style="padding:6px 12px; font-size:12px; font-weight:700;">Run</button>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible Full 14-Scenario Matrix Drawer (Hidden by default to eliminate clutter!) -->
+                    <div id="scenario-full-drawer" style="display:none; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-color);">
+                        <button class="btn btn-outline btn-test-case" data-test="1" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--accent-cyan);">T1:</b> Vehicle Confirmed</button>
+                        <button class="btn btn-outline btn-test-case" data-test="2" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--accent-amber);">T2:</b> Camera Stalled (5s)</button>
+                        <button class="btn btn-outline btn-test-case" data-test="3" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--status-critical);">T3:</b> Stalled Confirmed</button>
+                        <button class="btn btn-outline btn-test-case" data-test="4" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--accent-emerald);">T4:</b> Vehicle Moves (Reset)</button>
+                        <button class="btn btn-outline btn-test-case" data-test="5" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--status-critical);">T5:</b> Camera Wrong-Way</button>
+                        <button class="btn btn-outline btn-test-case" data-test="6" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--status-critical);">T6:</b> Wrong-Way Confirmed</button>
+                        <button class="btn btn-outline btn-test-case" data-test="7" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--accent-amber);">T7:</b> Possible Collision</button>
+                        <button class="btn btn-outline btn-test-case" data-test="8" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--status-critical);">T8:</b> Collision Confirmed</button>
+                        <button class="btn btn-outline btn-test-case" data-test="9" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--status-poor);">T9:</b> Sensor-Only Collision</button>
+                        <button class="btn btn-outline btn-test-case" data-test="10" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--status-poor);">T10:</b> Camera-Only Collision</button>
+                        <button class="btn btn-outline btn-test-case" data-test="11" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--accent-amber);">T11:</b> Sensor/Cam Mismatch</button>
+                        <button class="btn btn-outline btn-test-case" data-test="12" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--accent-cyan);">T12:</b> Sensor-Only Wet Road</button>
+                        <button class="btn btn-outline btn-test-case" data-test="13" style="font-size:11px; text-align:left; padding:8px;"><b style="color:var(--accent-amber);">T13:</b> Camera-Only Pothole</button>
+                        <button class="btn btn-outline btn-test-case" data-test="14" style="font-size:11px; text-align:left; padding:8px;"><b style="color:#f43f5e;">T14:</b> Vehicle Toppled Over</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -782,28 +972,256 @@
         <!-- ========================================== -->
         <div class="page-container" id="page-cv" data-title="Computer Vision Subsystem">
             <div class="dashboard-grid">
-                <div class="card" style="grid-column: span 8;">
+                <!-- Row 1: Camera Perception & Telemetry Metrics Cards (Section 2 & 4) -->
+                <div class="card" style="grid-column: span 2;">
                     <div class="card-header">
-                        <span class="card-title">Live Vision Stream (Phone Camera / Simulated Perception)</span>
-                        <span style="font-size:11px; color:var(--accent-cyan);">640x360 MJPEG</span>
+                        <span class="card-title">Camera Connection</span>
                     </div>
-                    <div class="cv-monitor-box">
-                        <img src="/api/cv/feed" alt="SentraX CV Camera Feed">
-                        <div class="cv-hud-overlay">SENTRAX CV DETECTOR: ACTIVE</div>
+                    <div class="card-value" style="font-size:18px;">
+                        <span id="cv-stat-connected" class="badge" style="background:rgba(239,68,68,0.2); color:#f87171; font-size:13px;">OFFLINE</span>
+                    </div>
+                    <div class="card-footer">
+                        <span id="cv-stat-source-name">Source: 0 (Webcam)</span>
                     </div>
                 </div>
+
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-header">
+                        <span class="card-title">Camera FPS</span>
+                        <span style="font-size:11px; color:var(--accent-cyan);">THROUGHPUT</span>
+                    </div>
+                    <div class="card-value">
+                        <span id="cv-stat-fps">0.0</span>
+                        <span class="card-unit">fps</span>
+                    </div>
+                    <div class="card-footer">Target: 30 FPS</div>
+                </div>
+
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-header">
+                        <span class="card-title">Resolution</span>
+                        <span style="font-size:11px; color:var(--text-muted);">FRAME SIZE</span>
+                    </div>
+                    <div class="card-value" style="font-size:20px;">
+                        <span id="cv-stat-resolution">640x360</span>
+                    </div>
+                    <div class="card-footer">Aspect: 16:9 HD Ready</div>
+                </div>
+
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-header">
+                        <span class="card-title">Pipeline Latency</span>
+                        <span style="font-size:11px; color:var(--accent-emerald);">SPEED</span>
+                    </div>
+                    <div class="card-value">
+                        <span id="cv-stat-latency">0</span>
+                        <span class="card-unit">ms</span>
+                    </div>
+                    <div class="card-footer">Perception Loop</div>
+                </div>
+
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-header">
+                        <span class="card-title">Detection Status</span>
+                    </div>
+                    <div class="card-value" style="font-size:18px;">
+                        <span id="cv-stat-detection" style="color:var(--accent-emerald); font-weight:700;">ACTIVE</span>
+                    </div>
+                    <div class="card-footer">Model: Contour & Tracking</div>
+                </div>
+
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-header">
+                        <span class="card-title">Tracking Status</span>
+                    </div>
+                    <div class="card-value" style="font-size:18px;">
+                        <span id="cv-stat-tracking" style="color:var(--accent-cyan); font-weight:700;">0 OBJECTS</span>
+                    </div>
+                    <div class="card-footer">CAM-00X Format</div>
+                </div>
+
+                <!-- Row 2: Live Video Stream & HUD (span 8) -->
+                <div class="card" style="grid-column: span 8;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <span class="card-title">Live Vision Stream (Phone Camera / Webcam Feed)</span>
+                            <span style="font-size:11px; color:var(--accent-cyan); margin-left:8px;">MJPEG STREAM</span>
+                        </div>
+                        <button class="btn btn-outline" id="btn-cv-reload-stream" style="padding:4px 8px; font-size:11px;" title="Reload Stream">⟳ Reload Feed</button>
+                    </div>
+                    <div class="cv-monitor-box" style="position:relative;">
+                        <img id="cv-feed-img" src="/api/cv/feed" alt="SentraX CV Camera Feed">
+                        <div class="cv-hud-overlay" id="cv-hud-overlay-text">SENTRAX CV DETECTOR: ACTIVE</div>
+                    </div>
+                </div>
+
+                <!-- Row 2 Right: Camera Device & Source Selector (span 4) -->
                 <div class="card" style="grid-column: span 4;">
                     <div class="card-header">
-                        <span class="card-title">Tracked Objects (Phone Camera)</span>
+                        <span class="card-title">Camera Device & Video Source</span>
                     </div>
-                    <div style="font-size:12px; color:var(--text-secondary); line-height:1.8;">
-                        <div>Perception Model: <b>Multi-Class Motion & Contour</b></div>
-                        <div>Speed Estimation: <b style="color:var(--accent-amber);">ESTIMATED (Uncalibrated)</b></div>
-                        <div>Target Classes: <b>Car, Bike, Truck, Bus, Pedestrian, Pothole</b></div>
+                    <div style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+                        Connect phone camera via USB webcam, DroidCam / Iriun, RTSP, or IP Webcam URL.
                     </div>
-                    <div style="margin-top:20px;">
-                        <button class="btn btn-outline" style="width:100%; margin-bottom:10px;" data-scenario="POTHOLE">Simulate Pothole in View</button>
-                        <button class="btn btn-outline" style="width:100%;" data-scenario="WRONG_WAY">Simulate Wrong-Way Trajectory</button>
+
+                    <div style="margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label style="font-size:11px; font-weight:700; color:var(--text-muted);">DETECTED HARDWARE CAMERAS</label>
+                            <button class="btn btn-outline" id="btn-cv-refresh-devices" style="padding:2px 8px; font-size:10px; color:var(--accent-cyan); border-color:var(--accent-cyan);" title="Rescan Windows Camera Devices">↻ Rescan</button>
+                        </div>
+                        <select id="cv-select-device" style="width:100%; padding:8px; background:var(--bg-secondary); border:1px solid var(--border-color); color:var(--text-primary); border-radius:4px; font-size:12px;">
+                            <option value="4">📱 Iriun Webcam (Device #4)</option>
+                            <option value="0">📷 Camera 0 (Default Webcam)</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:11px; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">OR CUSTOM STREAM URL / FILE</label>
+                        <input type="text" id="cv-input-custom-source" placeholder="e.g. 4, iriun, http://192.168.1.50:8080/video or synthetic" style="width:100%; padding:8px; background:var(--bg-secondary); border:1px solid var(--border-color); color:var(--text-primary); border-radius:4px; font-size:12px; box-sizing:border-box;">
+                    </div>
+
+                    <div style="display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap;">
+                        <button class="btn btn-outline cv-btn-preset pill-btn" data-source="4" style="padding:4px 8px; font-size:11px; border-color:var(--accent-cyan); color:var(--accent-cyan); font-weight:700;">📱 Iriun Webcam (4)</button>
+                        <button class="btn btn-outline cv-btn-preset pill-btn" data-source="0" style="padding:4px 8px; font-size:11px;">📷 WebCam (0)</button>
+                        <button class="btn btn-outline cv-btn-preset pill-btn" data-source="http://192.168.1.100:8080/video" style="padding:4px 8px; font-size:11px;">🌐 Phone IP</button>
+                        <button class="btn btn-outline cv-btn-preset pill-btn" data-source="synthetic" style="padding:4px 8px; font-size:11px;">🛣️ Synthetic</button>
+                    </div>
+
+                    <button class="btn btn-primary" id="btn-cv-apply-source" style="width:100%; padding:9px; font-size:12px; font-weight:700;">APPLY CAMERA SOURCE</button>
+                    <div id="cv-source-msg" style="font-size:11px; margin-top:8px; text-align:center; color:var(--text-muted);"></div>
+                </div>
+
+                <!-- Row 3: Virtual Speed Calibration (Line A & Line B) (span 6) -->
+                <div class="card" style="grid-column: span 6;">
+                    <div class="card-header">
+                        <span class="card-title">Virtual Speed Estimation Calibration</span>
+                        <span style="font-size:11px; color:var(--accent-amber);">SECTION 11</span>
+                    </div>
+                    <div style="font-size:12px; color:var(--text-secondary); margin-bottom:14px;">
+                        Speed is estimated by measuring transit time between two calibrated virtual lines: <code>v = (d / Δt) × 3.6 km/h</code>.
+                    </div>
+
+                    <div style="margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span><b>Line A Y-Position</b> (Start Line):</span>
+                            <span id="cv-lbl-line-a" style="color:var(--accent-cyan); font-weight:700;">140 px</span>
+                        </div>
+                        <input type="range" id="cv-range-line-a" min="20" max="320" value="140" style="width:100%;">
+                    </div>
+
+                    <div style="margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span><b>Line B Y-Position</b> (Finish Line):</span>
+                            <span id="cv-lbl-line-b" style="color:var(--accent-emerald); font-weight:700;">260 px</span>
+                        </div>
+                        <input type="range" id="cv-range-line-b" min="40" max="355" value="260" style="width:100%;">
+                    </div>
+
+                    <div style="margin-bottom:14px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span><b>Real-World Distance</b> Between Lines (meters):</span>
+                            <span style="color:var(--text-muted); font-size:11px;">Desktop demo: 0.3m</span>
+                        </div>
+                        <input type="number" id="cv-num-distance" step="0.05" min="0.05" max="100.0" value="0.30" style="width:100%; padding:8px; background:var(--bg-secondary); border:1px solid var(--border-color); color:var(--text-primary); border-radius:4px; font-size:12px; box-sizing:border-box;">
+                    </div>
+
+                    <div style="display:flex; gap:6px; margin-bottom:12px;">
+                        <button class="btn btn-outline cv-btn-dist-preset" data-dist="0.30" style="padding:4px 8px; font-size:11px;">Toy Car Demo (0.30m)</button>
+                        <button class="btn btn-outline cv-btn-dist-preset" data-dist="0.50" style="padding:4px 8px; font-size:11px;">Desk Setup (0.50m)</button>
+                        <button class="btn btn-outline cv-btn-dist-preset" data-dist="20.0" style="padding:4px 8px; font-size:11px;">Highway (20.0m)</button>
+                    </div>
+
+                    <button class="btn btn-primary" id="btn-cv-save-cal" style="width:100%; padding:8px; font-size:12px; font-weight:700;">SAVE SPEED CALIBRATION</button>
+                    <div id="cv-cal-msg" style="font-size:11px; margin-top:6px; text-align:center; color:var(--accent-emerald);"></div>
+                </div>
+
+                <!-- Row 3 Right: Temporal Logic & Scenario Parameters (span 6) -->
+                <div class="card" style="grid-column: span 6;">
+                    <div class="card-header">
+                        <span class="card-title">Temporal Logic & Perception Thresholds</span>
+                        <span style="font-size:11px; color:var(--accent-cyan);">STATE MACHINES</span>
+                    </div>
+                    <div style="font-size:12px; color:var(--text-secondary); margin-bottom:14px;">
+                        SentraX prevents false alarms by enforcing temporal persistence across frames (Sections 5-10).
+                    </div>
+
+                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border:1px solid var(--border-color); margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <b style="font-size:12px;">Stalled Vehicle Threshold</b>
+                                <div style="font-size:11px; color:var(--text-muted);">Demo: 5s | Production: 15s</div>
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <button class="btn btn-outline" id="btn-cv-stall-5s" style="padding:4px 8px; font-size:11px; font-weight:700; background:rgba(37,99,235,0.2); color:#60a5fa;">5s (DEMO)</button>
+                                <button class="btn btn-outline" id="btn-cv-stall-15s" style="padding:4px 8px; font-size:11px; font-weight:700;">15s (PROD)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border:1px solid var(--border-color); margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <b style="font-size:12px;">Traffic Congestion Logic</b>
+                                <div style="font-size:11px; color:var(--text-muted);">IR Grid & Density: ≥ 3 Vehicles, Low Speed</div>
+                            </div>
+                            <span class="badge" style="background:rgba(56,189,248,0.15); color:#38bdf8;">5.0s Persistence</span>
+                        </div>
+                    </div>
+
+                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border:1px solid var(--border-color); margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <b style="font-size:12px;">Wrong-Way Direction Trajectory</b>
+                                <div style="font-size:11px; color:var(--text-muted);">Compare vector against ROAD_DIRECTION</div>
+                            </div>
+                            <span class="badge" style="background:rgba(244,63,94,0.15); color:#f43f5e;">15s Window</span>
+                        </div>
+                    </div>
+
+                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border:1px solid var(--border-color);">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <b style="font-size:12px;">Prototype Overspeed Trigger</b>
+                                <div style="font-size:11px; color:var(--text-muted);">Calibrated for Toy-Car Demonstration</div>
+                            </div>
+                            <span class="badge" style="background:rgba(234,179,8,0.15); color:#fbbf24;">&gt; 4.0 km/h</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 4: Live Tracked Objects Feed (span 12) (Section 4) -->
+                <div class="card" style="grid-column: span 12;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <span class="card-title">Live Tracked Vehicles Feed (Camera Perception Stream)</span>
+                            <span class="badge" style="margin-left:8px; background:rgba(37,99,235,0.2); color:#60a5fa; font-size:11px;">SECTION 4 SPEC</span>
+                        </div>
+                        <div style="font-size:12px; color:var(--text-secondary);">
+                            Persistent Object Tracking | Centroid Trajectory | Temporal Filtering
+                        </div>
+                    </div>
+                    <div class="table-container" style="overflow-x:auto; margin-top:12px;">
+                        <table class="data-table" style="width:100%; text-align:left; border-collapse:collapse;" id="table-cv-tracks">
+                            <thead>
+                                <tr style="border-bottom:1px solid var(--border-color); color:var(--text-muted); font-size:12px;">
+                                    <th style="padding:10px 14px;">TRACK ID</th>
+                                    <th style="padding:10px 14px;">CLASS</th>
+                                    <th style="padding:10px 14px;">CONFIDENCE</th>
+                                    <th style="padding:10px 14px;">POSITION (X, Y)</th>
+                                    <th style="padding:10px 14px;">DIRECTION</th>
+                                    <th style="padding:10px 14px;">SPEED</th>
+                                    <th style="padding:10px 14px;">STATIONARY</th>
+                                    <th style="padding:10px 14px;">SAFETY STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-cv-tracks">
+                                <tr>
+                                    <td colspan="8" style="padding:20px; text-align:center; color:var(--text-muted);">
+                                        No vehicles currently detected in camera view. Point webcam at road scene or select synthetic demo.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -1220,6 +1638,92 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" id="btn-close-esp32-footer">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL 2: SECTION 58 DECISION EXPLAINABILITY & FORENSIC AUDIT   -->
+    <!-- ============================================================== -->
+    <div class="modal-backdrop" id="modal-explain-audit">
+        <div class="modal-dialog" style="max-width:760px; max-height:90vh; overflow-y:auto;">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <svg width="22" height="22" fill="#38bdf8" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                    <span>Multi-Modal Decision Audit & Explainability (Section 58)</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge" id="audit-badge-status" style="background:rgba(37,99,235,0.2); color:#60a5fa; font-weight:700;">CONFIRMED</span>
+                    <button class="modal-close" id="btn-close-audit">✕</button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding:16px;">
+                <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:8px; padding:12px; margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <span id="audit-event-title" style="font-size:15px; font-weight:700; color:var(--text-primary);">Event Forensic Inspection</span>
+                            <div id="audit-event-time" style="font-size:11px; color:var(--text-muted); margin-top:2px;">Timestamp: --</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <span id="audit-event-severity" class="badge" style="background:rgba(239,68,68,0.2); color:#f87171; font-weight:700;">HIGH</span>
+                            <div id="audit-event-id" style="font-size:11px; font-family:monospace; color:var(--text-muted); margin-top:2px;">ID: --</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8-Question Forensic Breakdown Grid (Section 58) -->
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <!-- 1. Sensor Observation -->
+                    <div style="background:rgba(56,189,248,0.05); border-left:3px solid var(--accent-cyan); padding:10px 14px; border-radius:4px;">
+                        <div style="font-size:11px; font-weight:800; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:0.5px;">1. What did the physical sensor detect?</div>
+                        <div id="audit-q1" style="font-size:12px; color:var(--text-primary); margin-top:4px; line-height:1.5;">--</div>
+                    </div>
+
+                    <!-- 2. Camera Observation -->
+                    <div style="background:rgba(168,85,247,0.05); border-left:3px solid #c084fc; padding:10px 14px; border-radius:4px;">
+                        <div style="font-size:11px; font-weight:800; color:#c084fc; text-transform:uppercase; letter-spacing:0.5px;">2. What did the camera vision system detect?</div>
+                        <div id="audit-q2" style="font-size:12px; color:var(--text-primary); margin-top:4px; line-height:1.5;">--</div>
+                    </div>
+
+                    <!-- 3. Agreement -->
+                    <div style="background:rgba(16,185,129,0.05); border-left:3px solid var(--accent-emerald); padding:10px 14px; border-radius:4px;">
+                        <div style="font-size:11px; font-weight:800; color:var(--accent-emerald); text-transform:uppercase; letter-spacing:0.5px;">3. Did the sensor and camera agree?</div>
+                        <div id="audit-q3" style="font-size:12px; color:var(--text-primary); margin-top:4px; line-height:1.5;">--</div>
+                    </div>
+
+                    <!-- 4. Confidence -->
+                    <div style="background:rgba(234,179,8,0.05); border-left:3px solid var(--accent-amber); padding:10px 14px; border-radius:4px;">
+                        <div style="font-size:11px; font-weight:800; color:var(--accent-amber); text-transform:uppercase; letter-spacing:0.5px;">4. What was the confidence and how was it computed?</div>
+                        <div id="audit-q4" style="font-size:12px; font-family:monospace; color:var(--text-primary); margin-top:4px; line-height:1.5;">--</div>
+                    </div>
+
+                    <!-- 5. Confirmation Reason -->
+                    <div style="background:rgba(255,255,255,0.03); border-left:3px solid var(--text-secondary); padding:10px 14px; border-radius:4px;">
+                        <div style="font-size:11px; font-weight:800; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;">5. Why was the event confirmed?</div>
+                        <div id="audit-q5" style="font-size:12px; color:var(--text-primary); margin-top:4px; line-height:1.5;">--</div>
+                    </div>
+
+                    <!-- 6. Risk Impact -->
+                    <div style="background:rgba(239,68,68,0.05); border-left:3px solid var(--accent-rose); padding:10px 14px; border-radius:4px;">
+                        <div style="font-size:11px; font-weight:800; color:var(--accent-rose); text-transform:uppercase; letter-spacing:0.5px;">6. How did it affect the road risk score?</div>
+                        <div id="audit-q6" style="font-size:12px; color:var(--text-primary); margin-top:4px; line-height:1.5;">--</div>
+                    </div>
+
+                    <!-- 7. Road Health Impact -->
+                    <div style="background:rgba(56,189,248,0.05); border-left:3px solid #0284c7; padding:10px 14px; border-radius:4px;">
+                        <div style="font-size:11px; font-weight:800; color:#38bdf8; text-transform:uppercase; letter-spacing:0.5px;">7. How did it affect road health (long-term)?</div>
+                        <div id="audit-q7" style="font-size:12px; color:var(--text-primary); margin-top:4px; line-height:1.5;">--</div>
+                    </div>
+
+                    <!-- 8. Speed Recommendation -->
+                    <div style="background:rgba(16,185,129,0.05); border-left:3px solid #059669; padding:10px 14px; border-radius:4px;">
+                        <div style="font-size:11px; font-weight:800; color:#34d399; text-transform:uppercase; letter-spacing:0.5px;">8. Why did SentraX recommend that speed?</div>
+                        <div id="audit-q8" style="font-size:12px; color:var(--text-primary); margin-top:4px; line-height:1.5;">--</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--border-color); display:flex; justify-content:flex-end;">
+                <button class="btn btn-outline" id="btn-close-audit-footer">Dismiss Audit</button>
             </div>
         </div>
     </div>

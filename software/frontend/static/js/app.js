@@ -31,7 +31,13 @@ const state = {
     webBluetoothDevice: null,
     webBluetoothServer: null,
     webBluetoothCharCommands: null,
-    lastEinkKey: null
+    lastEinkKey: null,
+    // Sensor-Camera Fusion & CV Extensions
+    detectionMode: 'FUSION',
+    bypassStandby: false,
+    demoStallMode: true,
+    cvStats: null,
+    cvConfig: null
 };
 
 // Initialize Application
@@ -47,10 +53,14 @@ document.addEventListener('DOMContentLoaded', () => {
     pollHardwareStatus();
     setInterval(pollHardwareStatus, 2000);
     setInterval(checkTelemetryWatchdog, 500);
+    initFusionAndCV();
 });
 
 // Telemetry stream watchdog: zeroes dashboard if ESP32 disconnects or freezes for > 2 seconds
 function checkTelemetryWatchdog() {
+    if (state.detectionMode === 'CAMERA' || state.bypassStandby) {
+        return;
+    }
     if (state.esp32Connected && state.lastPacketTime > 0) {
         if (Date.now() - state.lastPacketTime > 2000) {
             console.warn('[SentraX Watchdog] Telemetry signal lost (>2s without packets). Locking into Hardware Standby.');
@@ -63,6 +73,11 @@ function checkTelemetryWatchdog() {
 function resetDashboardToStandby(reasonMessage) {
     state.bothModulesConnected = false;
     state.lastPacketTime = 0;
+
+    // If in CAMERA mode or user bypassed standby for demonstration, do not lock screen
+    if (state.detectionMode === 'CAMERA' || state.bypassStandby) {
+        return;
+    }
 
     const standbyOverlay = document.getElementById('hardware-standby-overlay');
     if (standbyOverlay) standbyOverlay.classList.remove('hidden');
@@ -111,6 +126,22 @@ function resetDashboardToStandby(reasonMessage) {
     if (state.charts.risk) {
         state.charts.risk.data.datasets[0].data = Array(15).fill(0);
         state.charts.risk.update('none');
+    }
+
+    // Reset corridor incident alert banner
+    const banner = document.getElementById('live-incident-alert-banner');
+    if (banner) {
+        banner.className = 'live-incident-banner clear';
+        const iconEl = document.getElementById('incident-banner-icon');
+        const titleEl = document.getElementById('incident-banner-title');
+        const descEl = document.getElementById('incident-banner-desc');
+        const badgeEl = document.getElementById('incident-banner-badge');
+        const auditBtn = document.getElementById('btn-banner-inspect-audit');
+        if (iconEl) iconEl.textContent = '🛡️';
+        if (titleEl) titleEl.textContent = 'CORRIDOR STATUS: STANDBY';
+        if (descEl) descEl.textContent = 'Awaiting ESP32 hardware connection or test execution.';
+        if (badgeEl) badgeEl.textContent = 'STANDBY';
+        if (auditBtn) auditBtn.style.display = 'none';
     }
 
     updateHardwarePills();
@@ -207,9 +238,9 @@ function updateTelemetryUI(t) {
 
     const standbyOverlay = document.getElementById('hardware-standby-overlay');
 
-    if (state.esp32Connected) {
+    if (state.esp32Connected || state.detectionMode === 'CAMERA' || state.bypassStandby) {
         state.lastPacketTime = Date.now();
-        // UNLOCK DASHBOARD: Display live sensor stream
+        // UNLOCK DASHBOARD: Display live sensor/vision stream
         if (standbyOverlay) standbyOverlay.classList.add('hidden');
 
         setText('val-current-speed', t.measured_speed_kmh.toFixed(1));
@@ -250,6 +281,9 @@ function updateTelemetryUI(t) {
         setText('tel-us1', t.ultrasonic_state?.us1_active ? 'INTERRUPTED' : 'CLEAR');
         setText('tel-us2', t.ultrasonic_state?.us2_active ? 'INTERRUPTED' : 'CLEAR');
 
+        // Update real-time corridor incident alert banner
+        updateIncidentBanner(t);
+
         updateChartsStream(t);
         updateAerialTwinUI(t);
         updateNavigationScreenTelemetry(t);
@@ -259,7 +293,70 @@ function updateTelemetryUI(t) {
             ? t.risk_reasons[0]
             : 'Awaiting connection of ESP32 Core Controller.';
         resetDashboardToStandby(reason);
+        updateIncidentBanner(t);
         updateNavigationScreenTelemetry(t);
+    }
+}
+
+// Updates the Real-Time Corridor Incident Alert Banner (Collisions, Stalls, Topples, Wrong-Way)
+function updateIncidentBanner(t) {
+    const banner = document.getElementById('live-incident-alert-banner');
+    if (!banner || !t) return;
+    const iconEl = document.getElementById('incident-banner-icon');
+    const titleEl = document.getElementById('incident-banner-title');
+    const descEl = document.getElementById('incident-banner-desc');
+    const badgeEl = document.getElementById('incident-banner-badge');
+    const auditBtn = document.getElementById('btn-banner-inspect-audit');
+
+    if (t.vehicle_toppled) {
+        banner.className = 'live-incident-banner critical';
+        if (iconEl) iconEl.textContent = '🔄';
+        if (titleEl) titleEl.textContent = '🚨 CRITICAL: VEHICLE TOPPLED OVER / ROLLOVER';
+        if (descEl) descEl.textContent = 'Camera vision detected toy vehicle rollover (abnormal aspect ratio) on roadway corridor! Enforcing emergency 20 km/h advisory & warning strobe.';
+        if (badgeEl) badgeEl.textContent = 'CRITICAL ROLLOVER';
+        if (auditBtn) auditBtn.style.display = 'inline-block';
+    } else if (t.collision) {
+        banner.className = 'live-incident-banner critical';
+        if (iconEl) iconEl.textContent = '💥';
+        if (titleEl) titleEl.textContent = '🚨 CRITICAL ALERT: VEHICLE COLLISION DETECTED';
+        if (descEl) descEl.textContent = 'Multi-modal collision confirmed on corridor! Dynamic warning active, speed advisory reduced to 20 km/h.';
+        if (badgeEl) badgeEl.textContent = 'CRITICAL COLLISION';
+        if (auditBtn) auditBtn.style.display = 'inline-block';
+    } else if (t.wrong_way) {
+        banner.className = 'live-incident-banner critical';
+        if (iconEl) iconEl.textContent = '⛔';
+        if (titleEl) titleEl.textContent = '⛔ CRITICAL: WRONG-WAY VEHICLE DETECTED';
+        if (descEl) descEl.textContent = 'Vehicle trajectory analysis detected vehicle traveling against prescribed traffic direction!';
+        if (badgeEl) badgeEl.textContent = 'WRONG-WAY';
+        if (auditBtn) auditBtn.style.display = 'inline-block';
+    } else if (t.emergency_vehicle || t.rfid_active) {
+        banner.className = 'live-incident-banner warning';
+        if (iconEl) iconEl.textContent = '🚑';
+        if (titleEl) titleEl.textContent = '🚑 PRIORITY: EMERGENCY VEHICLE IN TRANSIT';
+        if (descEl) descEl.textContent = 'RFID tagged emergency vehicle passing through corridor. Green wave corridor priority signaled.';
+        if (badgeEl) badgeEl.textContent = 'EMERGENCY PASS';
+        if (auditBtn) auditBtn.style.display = 'inline-block';
+    } else if (t.stalled_vehicle) {
+        banner.className = 'live-incident-banner warning';
+        if (iconEl) iconEl.textContent = '⚠️';
+        if (titleEl) titleEl.textContent = '⚠️ WARNING: STALLED VEHICLE ON ROADWAY';
+        if (descEl) descEl.textContent = 'Vehicle stationary in roadway lane exceeding threshold duration. Corridor advisory speed reduced.';
+        if (badgeEl) badgeEl.textContent = 'STALLED VEHICLE';
+        if (auditBtn) auditBtn.style.display = 'inline-block';
+    } else if (t.road_condition === 'WET' || t.road_condition === 'SLIPPERY') {
+        banner.className = 'live-incident-banner warning';
+        if (iconEl) iconEl.textContent = '🌧️';
+        if (titleEl) titleEl.textContent = '🌧️ ADVISORY: WET / SLIPPERY SURFACE DETECTED';
+        if (descEl) descEl.textContent = 'Moisture sensor registers wet road surface. Speed advisory reduced to 50 km/h.';
+        if (badgeEl) badgeEl.textContent = 'WET SURFACE';
+        if (auditBtn) auditBtn.style.display = 'inline-block';
+    } else {
+        banner.className = 'live-incident-banner clear';
+        if (iconEl) iconEl.textContent = '🛡️';
+        if (titleEl) titleEl.textContent = 'CORRIDOR STATUS: NORMAL & CLEAR';
+        if (descEl) descEl.textContent = 'Physical sensors and camera perception reporting all clear. No active collisions, stalled vehicles, or hazards.';
+        if (badgeEl) badgeEl.textContent = 'ALL CLEAR';
+        if (auditBtn) auditBtn.style.display = 'none';
     }
 }
 
@@ -1379,12 +1476,15 @@ async function pairWebBluetooth() {
             device = await navigator.bluetooth.requestDevice({
                 filters: [
                     { name: 'SENTRAX-ESP32' },
-                    { namePrefix: 'SENTRAX' }
+                    { namePrefix: 'SENTRAX' },
+                    { namePrefix: 'SentraX' },
+                    { namePrefix: 'ESP32' },
+                    { services: [SENTRAX_SERVICE_UUID] }
                 ],
                 optionalServices: [SENTRAX_SERVICE_UUID]
             });
         } catch (filterErr) {
-            if (filterErr.name === 'NotFoundError' && filterErr.message.includes('User cancelled')) {
+            if (filterErr.name === 'NotFoundError' && (filterErr.message.includes('User cancelled') || filterErr.message.includes('cancelled'))) {
                 throw filterErr;
             }
             console.warn('Filtered device request fallback to acceptAllDevices:', filterErr);
@@ -1397,8 +1497,27 @@ async function pairWebBluetooth() {
         state.webBluetoothDevice = device;
         device.addEventListener('gattserverdisconnected', onWebBluetoothDisconnected);
 
-        if (statusEl) statusEl.textContent = `Connecting to ${device.name || 'SENTRAX-ESP32'}...`;
-        const server = await device.gatt.connect();
+        // Windows GATT Server Connection with Automatic Retry Loop
+        let server = null;
+        let lastConnectErr = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                if (statusEl) statusEl.textContent = `Connecting to ${device.name || 'SENTRAX-ESP32'} (Attempt ${attempt}/3)...`;
+                server = await device.gatt.connect();
+                if (server && server.connected) break;
+            } catch (connErr) {
+                lastConnectErr = connErr;
+                console.warn(`[SentraX BLE] GATT connect attempt ${attempt} failed:`, connErr);
+                if (attempt < 3) {
+                    await new Promise(r => setTimeout(r, 650));
+                }
+            }
+        }
+
+        if (!server || !server.connected) {
+            throw lastConnectErr || new Error("Could not establish GATT connection to ESP32.");
+        }
+
         state.webBluetoothServer = server;
 
         if (statusEl) statusEl.textContent = 'Discovering SentraX GATT Services...';
@@ -1445,6 +1564,8 @@ async function pairWebBluetooth() {
                 statusEl.style.color = 'var(--text-muted)';
             } else if (err.message && err.message.toLowerCase().includes('globally disabled')) {
                 statusEl.innerHTML = `<span style="color:var(--accent-rose);">Web Bluetooth is disabled in your Windows browser.</span><div style="font-size:11px; color:var(--text-secondary); margin-top:4px; line-height:1.4;">To enable: Open <code>chrome://flags/#enable-web-bluetooth-new-permissions-backend</code> in Chrome/Edge, set to <b>Enabled</b>, and relaunch.<br>Or connect via <b>Option B (COM Port)</b> below with Arduino IDE Serial Monitor closed.</div>`;
+            } else if (err.name === 'NetworkError' || (err.message && err.message.toLowerCase().includes('connection failed'))) {
+                statusEl.innerHTML = `<span style="color:var(--accent-rose);">GATT Connection Error: Windows Bluetooth radio rejected connection.</span><div style="font-size:11px; color:var(--text-secondary); margin-top:5px; line-height:1.4;"><b>Fix on Windows:</b><br>1. If <b>SENTRAX-ESP32</b> is paired in Windows Settings &rarr; <i>Bluetooth & devices</i>, click <b>Remove device</b> so Chrome has exclusive GATT access.<br>2. Ensure ESP32 is powered on (blue/red LED lit).<br>3. Or use <b>Option B (PC Bluetooth / Serial Port)</b> below!</div>`;
             } else {
                 statusEl.textContent = `Pairing failed: ${err.message}`;
                 statusEl.style.color = 'var(--accent-rose)';
@@ -1745,6 +1866,11 @@ function initAerialControls() {
             alertBtns.forEach(b => b.classList.remove('active-trigger'));
             btn.classList.add('active-trigger');
 
+            // Bypass standby to immediately inspect triggered manual alert
+            state.bypassStandby = true;
+            const standbyOverlay = document.getElementById('hardware-standby-overlay');
+            if (standbyOverlay) standbyOverlay.classList.add('hidden');
+
             try {
                 if (feedbackBanner) {
                     feedbackBanner.textContent = `Triggering ${alertType} alert on physical ESP32 & LEDs...`;
@@ -2023,4 +2149,624 @@ function resetAerialTwinToStandby() {
 
     renderEInkTwin('--', 'STANDBY', '⏳', 'CONNECT ESP32 HARDWARE', '0.0', 'OFFLINE');
 }
+
+// ==============================================================
+// SENSOR-CAMERA FUSION & COMPUTER VISION EXTENSIONS
+// ==============================================================
+
+async function initFusionAndCV() {
+    // 1. Detection Mode Switcher Buttons (Section 31)
+    const btnFusion = document.getElementById('btn-mode-fusion');
+    const btnSensor = document.getElementById('btn-mode-sensor');
+    const btnCamera = document.getElementById('btn-mode-camera');
+
+    if (btnFusion) btnFusion.addEventListener('click', () => setDetectionMode('FUSION'));
+    if (btnSensor) btnSensor.addEventListener('click', () => setDetectionMode('SENSOR'));
+    if (btnCamera) btnCamera.addEventListener('click', () => setDetectionMode('CAMERA'));
+
+    // 2. Standby Overlay Bypass Button
+    const btnBypass = document.getElementById('btn-bypass-standby');
+    if (btnBypass) {
+        btnBypass.addEventListener('click', () => {
+            state.bypassStandby = true;
+            const overlay = document.getElementById('hardware-standby-overlay');
+            if (overlay) overlay.classList.add('hidden');
+            setDetectionMode('FUSION');
+        });
+    }
+
+    // 3. Demo Stalled Vehicle Timer Toggle (Section 6 & 34)
+    const btnToggleStall = document.getElementById('btn-toggle-demo-stall');
+    if (btnToggleStall) {
+        btnToggleStall.addEventListener('click', async () => {
+            const nextMode = !state.demoStallMode;
+            await setDemoStallMode(nextMode);
+        });
+    }
+
+    const btnStall5s = document.getElementById('btn-cv-stall-5s');
+    const btnStall15s = document.getElementById('btn-cv-stall-15s');
+    if (btnStall5s) btnStall5s.addEventListener('click', () => setDemoStallMode(true));
+    if (btnStall15s) btnStall15s.addEventListener('click', () => setDemoStallMode(false));
+
+    // 4. Camera Device & Source Selector (Section 2)
+    await loadCameraDevices();
+    const btnApplySource = document.getElementById('btn-cv-apply-source');
+    if (btnApplySource) {
+        btnApplySource.addEventListener('click', async () => {
+            const customInput = document.getElementById('cv-input-custom-source');
+            const selectDevice = document.getElementById('cv-select-device');
+            const source = (customInput && customInput.value.trim()) ? customInput.value.trim() : (selectDevice?.value || '0');
+            await applyCameraSource(source);
+        });
+    }
+
+    const selectDeviceEl = document.getElementById('cv-select-device');
+    if (selectDeviceEl) {
+        selectDeviceEl.addEventListener('change', () => {
+            const customInput = document.getElementById('cv-input-custom-source');
+            if (customInput) customInput.value = selectDeviceEl.value;
+        });
+    }
+
+    const btnRefreshDevices = document.getElementById('btn-cv-refresh-devices');
+    if (btnRefreshDevices) {
+        btnRefreshDevices.addEventListener('click', async () => {
+            btnRefreshDevices.disabled = true;
+            btnRefreshDevices.textContent = '↻ Scanning...';
+            try {
+                await loadCameraDevices(true);
+            } finally {
+                btnRefreshDevices.disabled = false;
+                btnRefreshDevices.textContent = '↻ Rescan';
+            }
+        });
+    }
+
+    document.querySelectorAll('.cv-btn-preset').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const src = btn.getAttribute('data-source');
+            const customInput = document.getElementById('cv-input-custom-source');
+            if (customInput) customInput.value = src;
+            await applyCameraSource(src);
+        });
+    });
+
+    const btnReloadStream = document.getElementById('btn-cv-reload-stream');
+    if (btnReloadStream) {
+        btnReloadStream.addEventListener('click', () => {
+            const feedImg = document.getElementById('cv-feed-img');
+            if (feedImg) feedImg.src = '/api/cv/feed?t=' + Date.now();
+        });
+    }
+
+    // 5. Virtual Speed Calibration (Section 11)
+    initSpeedCalibration();
+
+    // 6. 13-Scenario Interactive Test Deck (Section 43)
+    initScenarioDeck();
+
+    // 7. Section 58 Forensic Decision Audit Modal
+    initDecisionAuditModal();
+
+    // 8. Initial Fetch & Periodic Polling (every 1.5s)
+    await pollFusionAndCV();
+    setInterval(pollFusionAndCV, 1500);
+}
+
+async function setDetectionMode(mode) {
+    try {
+        const res = await fetch('/api/fusion/mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: mode })
+        });
+        if (res.ok) {
+            state.detectionMode = mode;
+            // Update mode buttons UI
+            const btns = {
+                'FUSION': document.getElementById('btn-mode-fusion'),
+                'SENSOR': document.getElementById('btn-mode-sensor'),
+                'CAMERA': document.getElementById('btn-mode-camera')
+            };
+            Object.keys(btns).forEach(m => {
+                const b = btns[m];
+                if (b) {
+                    if (m === mode) {
+                        b.classList.add('active');
+                        b.style.background = '#2563eb';
+                        b.style.color = '#fff';
+                    } else {
+                        b.classList.remove('active');
+                        b.style.background = 'transparent';
+                        b.style.color = 'var(--text-secondary)';
+                    }
+                }
+            });
+
+            const badgeLabel = document.getElementById('badge-fusion-mode-label');
+            if (badgeLabel) badgeLabel.textContent = `MODE: ${mode}`;
+
+            if (mode === 'CAMERA') {
+                state.bypassStandby = true;
+                const overlay = document.getElementById('hardware-standby-overlay');
+                if (overlay) overlay.classList.add('hidden');
+            }
+
+            await pollFusionAndCV();
+        }
+    } catch (err) {
+        console.error('Error setting detection mode:', err);
+    }
+}
+
+async function setDemoStallMode(isDemo) {
+    try {
+        const res = await fetch('/api/cv/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ demo_mode: isDemo })
+        });
+        if (res.ok) {
+            state.demoStallMode = isDemo;
+            const btnToggle = document.getElementById('btn-toggle-demo-stall');
+            if (btnToggle) {
+                btnToggle.textContent = isDemo ? '⏱️ DEMO: 5s STALL' : '⏱️ PROD: 15s STALL';
+                btnToggle.style.color = isDemo ? 'var(--accent-amber)' : 'var(--accent-cyan)';
+            }
+            const btn5s = document.getElementById('btn-cv-stall-5s');
+            const btn15s = document.getElementById('btn-cv-stall-15s');
+            if (btn5s && btn15s) {
+                if (isDemo) {
+                    btn5s.style.background = 'rgba(37,99,235,0.2)';
+                    btn5s.style.color = '#60a5fa';
+                    btn15s.style.background = 'transparent';
+                    btn15s.style.color = 'var(--text-secondary)';
+                } else {
+                    btn15s.style.background = 'rgba(37,99,235,0.2)';
+                    btn15s.style.color = '#60a5fa';
+                    btn5s.style.background = 'transparent';
+                    btn5s.style.color = 'var(--text-secondary)';
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error setting demo stall mode:', err);
+    }
+}
+
+async function loadCameraDevices(forceRefresh = false) {
+    const select = document.getElementById('cv-select-device');
+    if (!select) return;
+    try {
+        const url = forceRefresh ? '/api/cv/devices?refresh=true' : '/api/cv/devices';
+        const res = await fetch(url);
+        if (res.ok) {
+            const devices = await res.json();
+            if (Array.isArray(devices) && devices.length > 0) {
+                select.innerHTML = devices.map(d => {
+                    const isIriun = (d.name && d.name.toLowerCase().includes('iriun')) || d.index === 4;
+                    const resTag = d.resolution ? ` [${d.resolution}]` : '';
+                    const icon = d.is_phone ? '📱 ' : '📷 ';
+                    const cleanName = d.name.replace('[Phone] ', '').replace('[Camera] ', '');
+                    return `<option value="${d.source || d.index}" ${isIriun ? 'selected' : ''}>${icon}${cleanName}${resTag}</option>`;
+                }).join('');
+
+                // Also populate custom input with selected device source
+                const customInput = document.getElementById('cv-input-custom-source');
+                if (customInput && !customInput.value) {
+                    customInput.value = select.value;
+                }
+            } else {
+                select.innerHTML = '<option value="4">📱 Iriun Webcam (Device #4)</option><option value="0">📷 Camera 0 (Default Webcam)</option><option value="synthetic">🛣️ Synthetic Test Scene</option>';
+            }
+        }
+    } catch (err) {
+        console.warn('Could not load camera devices list:', err);
+    }
+}
+
+async function applyCameraSource(source) {
+    const msgEl = document.getElementById('cv-source-msg');
+    if (msgEl) {
+        msgEl.textContent = `Connecting to camera source: ${source}...`;
+        msgEl.style.color = 'var(--accent-cyan)';
+    }
+    try {
+        const res = await fetch('/api/cv/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ camera_source: source })
+        });
+        if (res.ok) {
+            if (msgEl) {
+                msgEl.textContent = `Applied source: ${source}`;
+                msgEl.style.color = 'var(--accent-emerald)';
+            }
+            const feedImg = document.getElementById('cv-feed-img');
+            if (feedImg) feedImg.src = '/api/cv/feed?t=' + Date.now();
+            await pollFusionAndCV();
+        } else {
+            if (msgEl) {
+                msgEl.textContent = 'Failed to apply camera source';
+                msgEl.style.color = 'var(--accent-rose)';
+            }
+        }
+    } catch (err) {
+        if (msgEl) {
+            msgEl.textContent = `Error: ${err.message}`;
+            msgEl.style.color = 'var(--accent-rose)';
+        }
+    }
+}
+
+function initSpeedCalibration() {
+    const rangeA = document.getElementById('cv-range-line-a');
+    const rangeB = document.getElementById('cv-range-line-b');
+    const lblA = document.getElementById('cv-lbl-line-a');
+    const lblB = document.getElementById('cv-lbl-line-b');
+    const numDist = document.getElementById('cv-num-distance');
+    const btnSave = document.getElementById('btn-cv-save-cal');
+    const msgEl = document.getElementById('cv-cal-msg');
+
+    if (rangeA && lblA) {
+        rangeA.addEventListener('input', () => { lblA.textContent = `${rangeA.value} px`; });
+    }
+    if (rangeB && lblB) {
+        rangeB.addEventListener('input', () => { lblB.textContent = `${rangeB.value} px`; });
+    }
+
+    document.querySelectorAll('.cv-btn-dist-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const d = btn.getAttribute('data-dist');
+            if (numDist) numDist.value = d;
+        });
+    });
+
+    if (btnSave) {
+        btnSave.addEventListener('click', async () => {
+            const a = parseInt(rangeA?.value || '140');
+            const b = parseInt(rangeB?.value || '260');
+            const dist = parseFloat(numDist?.value || '0.30');
+
+            if (a >= b) {
+                if (msgEl) {
+                    msgEl.textContent = 'Line A must be above Line B (A < B).';
+                    msgEl.style.color = 'var(--accent-rose)';
+                }
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/cv/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        speed_calibration: {
+                            line_a_y: a,
+                            line_b_y: b,
+                            distance_meters: dist
+                        }
+                    })
+                });
+                if (res.ok) {
+                    if (msgEl) {
+                        msgEl.textContent = `Saved: Line A=${a}px, Line B=${b}px, Distance=${dist}m`;
+                        msgEl.style.color = 'var(--accent-emerald)';
+                    }
+                }
+            } catch (err) {
+                if (msgEl) {
+                    msgEl.textContent = `Error: ${err.message}`;
+                    msgEl.style.color = 'var(--accent-rose)';
+                }
+            }
+        });
+    }
+
+    // Load initial calibration from backend
+    fetch('/api/cv/config').then(r => r.json()).then(cfg => {
+        if (cfg && cfg.speed_calibration) {
+            if (rangeA) rangeA.value = cfg.speed_calibration.line_a_y;
+            if (lblA) lblA.textContent = `${cfg.speed_calibration.line_a_y} px`;
+            if (rangeB) rangeB.value = cfg.speed_calibration.line_b_y;
+            if (lblB) lblB.textContent = `${cfg.speed_calibration.line_b_y} px`;
+            if (numDist) numDist.value = cfg.speed_calibration.distance_meters;
+        }
+        if (cfg && cfg.demo_mode !== undefined) {
+            state.demoStallMode = cfg.demo_mode;
+            const btnToggle = document.getElementById('btn-toggle-demo-stall');
+            if (btnToggle) {
+                btnToggle.textContent = cfg.demo_mode ? '⏱️ DEMO: 5s STALL' : '⏱️ PROD: 15s STALL';
+            }
+        }
+    }).catch(e => console.warn('Could not load CV config:', e));
+}
+
+async function executeTestCase(tcNum) {
+    if (!tcNum) return;
+
+    // Unlock standby overlay for test inspection
+    state.bypassStandby = true;
+    const overlay = document.getElementById('hardware-standby-overlay');
+    if (overlay) overlay.classList.add('hidden');
+
+    // Sync select dropdown
+    const selectPicker = document.getElementById('select-scenario-picker');
+    if (selectPicker) selectPicker.value = String(tcNum);
+
+    // Highlight active test case buttons
+    const buttons = document.querySelectorAll('.btn-test-case');
+    buttons.forEach(b => {
+        if (parseInt(b.getAttribute('data-test')) === tcNum) {
+            b.style.borderColor = 'var(--accent-cyan)';
+            b.style.boxShadow = '0 0 10px rgba(56, 189, 248, 0.4)';
+        } else {
+            b.style.borderColor = '';
+            b.style.boxShadow = '';
+        }
+    });
+
+    try {
+        const res = await fetch('/api/cv/trigger-test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ test_case: tcNum })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            console.log(`[SentraX Test Suite] Triggered Test Case ${tcNum}:`, data);
+            if (data.fused_telemetry) {
+                updateTelemetryUI(data.fused_telemetry);
+            }
+            if (data.fusion_table) {
+                renderFusionTable(data.fusion_table);
+            }
+            await pollFusionAndCV();
+        }
+    } catch (err) {
+        console.error(`Error triggering test case ${tcNum}:`, err);
+    }
+}
+
+function initScenarioDeck() {
+    const buttons = document.querySelectorAll('.btn-test-case');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const tcNum = parseInt(btn.getAttribute('data-test'));
+            if (tcNum) await executeTestCase(tcNum);
+        });
+    });
+
+    const btnRunSelected = document.getElementById('btn-run-selected-scenario');
+    const selectPicker = document.getElementById('select-scenario-picker');
+    if (btnRunSelected && selectPicker) {
+        btnRunSelected.addEventListener('click', async () => {
+            const tcNum = parseInt(selectPicker.value);
+            if (tcNum) await executeTestCase(tcNum);
+        });
+    }
+
+    const btnToggleDrawer = document.getElementById('btn-toggle-scenario-drawer');
+    const drawer = document.getElementById('scenario-full-drawer');
+    if (btnToggleDrawer && drawer) {
+        btnToggleDrawer.addEventListener('click', () => {
+            const isHidden = drawer.style.display === 'none' || getComputedStyle(drawer).display === 'none';
+            if (isHidden) {
+                drawer.style.display = 'grid';
+                btnToggleDrawer.textContent = '▴ Collapse Scenario Matrix';
+                btnToggleDrawer.style.color = 'var(--accent-cyan)';
+            } else {
+                drawer.style.display = 'none';
+                btnToggleDrawer.textContent = '▾ Expand All 14 Test Cases';
+                btnToggleDrawer.style.color = 'var(--text-secondary)';
+            }
+        });
+    }
+}
+
+async function pollFusionAndCV() {
+    try {
+        // 1. Poll Live 5-Column Fusion Table
+        const resTable = await fetch('/api/fusion/table');
+        if (resTable.ok) {
+            const tableRows = await resTable.json();
+            renderFusionTable(tableRows);
+        }
+
+        // 2. Poll CV Telemetry & Tracking Stats
+        const resStats = await fetch('/api/cv/stats');
+        if (resStats.ok) {
+            const stats = await resStats.json();
+            state.cvStats = stats;
+            renderCVStats(stats);
+        }
+    } catch (err) {
+        // Silent catch for background poll
+    }
+}
+
+function renderFusionTable(rows) {
+    const tbody = document.getElementById('tbody-fusion-matrix');
+    if (!tbody || !Array.isArray(rows) || rows.length === 0) return;
+
+    tbody.innerHTML = rows.map(r => {
+        let finalBadge = `<span style="font-weight:700;">${r.final}</span>`;
+        const fUpper = (r.final || '').toUpperCase();
+
+        if (fUpper.includes('CONFIRMED')) {
+            finalBadge = `<span class="badge" style="background:rgba(16,185,129,0.2); color:#34d399; font-weight:700; padding:2px 8px; border-radius:4px;">${r.final}</span>`;
+        } else if (fUpper.includes('SENSOR ONLY')) {
+            finalBadge = `<span class="badge" style="background:rgba(56,189,248,0.2); color:#38bdf8; font-weight:700; padding:2px 8px; border-radius:4px;">${r.final}</span>`;
+        } else if (fUpper.includes('CAMERA ONLY') || fUpper.includes('CAMERA DETECTED')) {
+            finalBadge = `<span class="badge" style="background:rgba(168,85,247,0.2); color:#c084fc; font-weight:700; padding:2px 8px; border-radius:4px;">${r.final}</span>`;
+        } else if (fUpper.includes('MISMATCH') || fUpper.includes('POSSIBLE')) {
+            finalBadge = `<span class="badge" style="background:rgba(245,158,11,0.2); color:#fbbf24; font-weight:700; padding:2px 8px; border-radius:4px;">${r.final}</span>`;
+        } else if (fUpper === 'CLEAR' || fUpper === 'IDLE' || fUpper === 'NORMAL' || fUpper.includes('--')) {
+            finalBadge = `<span style="color:var(--text-muted);">${r.final}</span>`;
+        }
+
+        return `
+            <tr style="border-bottom:1px solid var(--border-color); cursor:pointer;" class="fusion-table-row" title="Click to view 8-Point Forensic Decision Audit (Section 58)">
+                <td style="padding:10px 14px; font-weight:700;">${r.event}</td>
+                <td style="padding:10px 14px; color:var(--text-secondary);">${r.sensor}</td>
+                <td style="padding:10px 14px; color:var(--text-secondary);">${r.camera}</td>
+                <td style="padding:10px 14px;">${finalBadge}</td>
+                <td style="padding:10px 14px; font-weight:700; color:${r.confidence && r.confidence !== '--' ? 'var(--accent-cyan)' : 'var(--text-muted)'};">
+                    ${r.confidence} <span style="font-size:10px; color:var(--accent-cyan); margin-left:4px;">🔍</span>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    tbody.querySelectorAll('.fusion-table-row').forEach(tr => {
+        tr.addEventListener('click', () => {
+            openDecisionAudit("latest");
+        });
+    });
+}
+
+function initDecisionAuditModal() {
+    const btnInspect = document.getElementById('btn-inspect-latest-decision');
+    const btnBannerAudit = document.getElementById('btn-banner-inspect-audit');
+    const modal = document.getElementById('modal-explain-audit');
+    const btnClose = document.getElementById('btn-close-audit');
+    const btnCloseFooter = document.getElementById('btn-close-audit-footer');
+
+    if (btnInspect) {
+        btnInspect.addEventListener('click', async () => {
+            await openDecisionAudit("latest");
+        });
+    }
+    if (btnBannerAudit) {
+        btnBannerAudit.addEventListener('click', async () => {
+            await openDecisionAudit("latest");
+        });
+    }
+
+    const closeModal = () => {
+        if (modal) modal.classList.remove('active');
+    };
+
+    if (btnClose) btnClose.addEventListener('click', closeModal);
+    if (btnCloseFooter) btnCloseFooter.addEventListener('click', closeModal);
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+    }
+}
+
+async function openDecisionAudit(eventId = "latest") {
+    const modal = document.getElementById('modal-explain-audit');
+    if (!modal) return;
+
+    try {
+        const res = await fetch(`/api/fusion/explain/${eventId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        setText('audit-event-title', data.title || 'Decision Audit');
+        setText('audit-event-time', `Timestamp: ${data.formatted_time || '--'}`);
+        setText('audit-event-id', `ID: ${data.event_id || '--'}`);
+
+        const badgeStatus = document.getElementById('audit-badge-status');
+        if (badgeStatus) {
+            badgeStatus.textContent = data.match_status || 'CONFIRMED';
+            badgeStatus.className = 'badge ' + ((data.match_status || '').includes('CONFIRMED') ? 'good' : 'warning');
+        }
+
+        const badgeSev = document.getElementById('audit-event-severity');
+        if (badgeSev) {
+            badgeSev.textContent = data.severity || 'INFO';
+            badgeSev.style.color = (data.severity === 'CRITICAL' || data.severity === 'HIGH') ? '#f87171' : '#34d399';
+        }
+
+        const audit = data.audit || {};
+        setText('audit-q1', audit['1_sensor_detection'] || '--');
+        setText('audit-q2', audit['2_camera_detection'] || '--');
+        setText('audit-q3', audit['3_did_they_agree'] || '--');
+        setText('audit-q4', audit['4_confidence_score'] || '--');
+        setText('audit-q5', audit['5_confirmation_reason'] || '--');
+        setText('audit-q6', audit['6_risk_score_impact'] || '--');
+        setText('audit-q7', audit['7_road_health_impact'] || '--');
+        setText('audit-q8', audit['8_recommended_speed_rationale'] || '--');
+
+        modal.classList.add('active');
+    } catch (err) {
+        console.error('Error fetching decision audit:', err);
+    }
+}
+
+function renderCVStats(s) {
+    if (!s) return;
+
+    // 1. Connection Card
+    const elConn = document.getElementById('cv-stat-connected');
+    if (elConn) {
+        if (s.camera_connected) {
+            elConn.textContent = 'CONNECTED';
+            elConn.style.background = 'rgba(16,185,129,0.2)';
+            elConn.style.color = '#34d399';
+        } else {
+            elConn.textContent = 'SYNTHETIC';
+            elConn.style.background = 'rgba(234,179,8,0.2)';
+            elConn.style.color = '#fbbf24';
+        }
+    }
+
+    const elSrc = document.getElementById('cv-stat-source-name');
+    if (elSrc) elSrc.textContent = `Source: ${s.device_name || s.camera_source || 'Webcam'}`;
+
+    // 2. Metrics
+    setText('cv-stat-fps', typeof s.camera_fps === 'number' ? s.camera_fps.toFixed(1) : (s.camera_fps || '0.0'));
+    setText('cv-stat-resolution', s.camera_resolution || '640x360');
+    setText('cv-stat-latency', typeof s.camera_latency_ms === 'number' ? Math.round(s.camera_latency_ms) : (s.camera_latency_ms || '0'));
+    setText('cv-stat-detection', s.detection_status || 'ACTIVE');
+    setText('cv-stat-tracking', s.tracking_status || '0 OBJECTS');
+
+    // 3. Tracked Objects Table
+    const tbody = document.getElementById('tbody-cv-tracks');
+    if (tbody) {
+        const tracks = s.tracks || [];
+        if (tracks.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="padding:20px; text-align:center; color:var(--text-muted);">
+                        No vehicles currently detected in camera view. Point phone webcam at road scene or select synthetic demo.
+                    </td>
+                </tr>
+            `;
+        } else {
+            tbody.innerHTML = tracks.map(t => {
+                let statusBadge = '<span class="badge" style="background:rgba(16,185,129,0.2); color:#34d399;">MOVING</span>';
+                if (t.is_stalled || (t.is_stationary && t.stationary_duration_seconds >= 5)) {
+                    statusBadge = '<span class="badge" style="background:rgba(239,68,68,0.2); color:#f87171; font-weight:700;">STALLED</span>';
+                } else if (t.is_stationary) {
+                    statusBadge = `<span class="badge" style="background:rgba(245,158,11,0.2); color:#fbbf24;">STOPPED (${t.stationary_duration_seconds.toFixed(0)}s)</span>`;
+                } else if (t.direction === 'OPPOSITE') {
+                    statusBadge = '<span class="badge" style="background:rgba(239,68,68,0.2); color:#f87171; font-weight:700;">WRONG-WAY</span>';
+                }
+
+                const posX = Math.round(t.current_x);
+                const posY = Math.round(t.current_y);
+                const spdStr = t.estimated_speed_kmh > 0 ? `${t.estimated_speed_kmh.toFixed(1)} km/h` : '--';
+
+                return `
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:10px 14px; font-weight:700; color:var(--accent-cyan);">${t.tracking_id}</td>
+                        <td style="padding:10px 14px; text-transform:uppercase;">${t.classification}</td>
+                        <td style="padding:10px 14px;">${Math.round(t.confidence * 100)}%</td>
+                        <td style="padding:10px 14px; font-family:monospace;">[${posX}, ${posY}]</td>
+                        <td style="padding:10px 14px;">${t.direction || 'FORWARD'}</td>
+                        <td style="padding:10px 14px; font-weight:700;">${spdStr}</td>
+                        <td style="padding:10px 14px;">${t.stationary_duration_seconds ? t.stationary_duration_seconds.toFixed(1) + 's' : '0.0s'}</td>
+                        <td style="padding:10px 14px;">${statusBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+}
+
 

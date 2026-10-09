@@ -70,6 +70,7 @@ class CanonicalTelemetry(BaseModel):
     collision: bool = False
     wrong_way: bool = False
     stalled_vehicle: bool = False
+    vehicle_toppled: bool = False
     emergency_vehicle: bool = False
 
     # Environmental sensors

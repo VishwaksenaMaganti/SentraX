@@ -94,9 +94,26 @@ async def background_perception_loop():
                     esp8266_conn = True
 
             both_conn = bool(esp32_conn)
+            from software.backend.schemas.events import DetectionMode
+            from software.backend.engines.fusion_engine import fusion_engine
 
-            if both_conn:
-                # ESP32 CONNECTED: Ingest fresh live sensor telemetry
+            current_mode = fusion_engine.get_detection_mode()
+
+            if current_mode == DetectionMode.CAMERA:
+                # CAMERA MODE: Independent perception driven by camera vision
+                base_tele = simulator.telemetry.model_copy(deep=True)
+                base_tele.esp32_connected = esp32_conn
+                base_tele.esp8266_connected = esp8266_conn
+                base_tele.hardware_standby = False
+                base_tele.source = DeviceSource.CAMERA
+                fused_tele, new_events = DataFusionEngine.fuse_telemetry_and_cv(base_tele, cv_stats)
+                fused_tele.hardware_standby = False
+                simulator.telemetry = fused_tele
+                evt = new_events[0] if new_events else None
+                await broadcast_telemetry_event(fused_tele, evt)
+
+            elif current_mode == DetectionMode.FUSION and both_conn:
+                # FUSION MODE WITH HARDWARE CONNECTED
                 live_tele = None
                 if live_ble and live_ble.is_connected and live_ble.latest_live_telemetry:
                     if (now - live_ble.latest_live_telemetry.timestamp < 2.0):
@@ -123,7 +140,15 @@ async def background_perception_loop():
                 else:
                     both_conn = False
 
-            if not both_conn:
+            elif current_mode == DetectionMode.FUSION and (simulator.telemetry.is_simulated or simulator.current_scenario != "NORMAL"):
+                # FUSION MODE WITH SIMULATED/DEMO TEST CASE ACTIVE
+                fused_tele, new_events = DataFusionEngine.fuse_telemetry_and_cv(simulator.telemetry, cv_stats)
+                fused_tele.hardware_standby = False
+                simulator.telemetry = fused_tele
+                evt = new_events[0] if new_events else None
+                await broadcast_telemetry_event(fused_tele, evt)
+
+            else:
                 # HARDWARE STANDBY: Zero simulated data and wipe any cached telemetry
                 if hasattr(simulator, "_latest_live_telemetry"):
                     simulator._latest_live_telemetry = None
@@ -154,6 +179,8 @@ async def background_perception_loop():
                     sound_active=False,
                     rfid_active=False,
                     night_mode=False,
+                    cv_vehicle_count=cv_stats.get("vehicle_count", 0),
+                    cv_pothole_count=cv_stats.get("pothole_count", 0),
                     risk_score=0,
                     risk_reasons=[standby_msg],
                     source=DeviceSource.FUSION,

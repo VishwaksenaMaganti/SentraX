@@ -19,6 +19,7 @@ class HazardType(str, Enum):
     EMERGENCY_VEHICLE = "EMERGENCY_VEHICLE"
     WET_ROAD = "WET_ROAD"
     ROAD_OBSTRUCTION = "ROAD_OBSTRUCTION"
+    VEHICLE_TOPPLED = "VEHICLE_TOPPLED"
     HIGH_RISK_ZONE = "HIGH_RISK_ZONE"
 
 
@@ -59,15 +60,22 @@ class PotholeRecord(BaseModel):
     is_simulated: bool = False
 
 
+from typing import Optional, Dict, Any, List, Union
+
 class VehicleTrack(BaseModel):
-    track_id: int
-    vehicle_class: str = "CAR"  # CAR, BIKE, TRUCK, BUS, PEDESTRIAN, ANIMAL, EMERGENCY
+    track_id: Union[int, str]
+    tracking_label: str = "CAM-001"
+    vehicle_class: str = "CAR"  # CAR, MOTORCYCLE, TRUCK, BUS, PEDESTRIAN, ANIMAL, EMERGENCY_VEHICLE
     confidence: float = 0.85
     bbox: List[int] = Field(default_factory=lambda: [0, 0, 0, 0])  # x, y, w, h
-    direction: str = "NORTH"  # NORTH, SOUTH, EAST, WEST, OPPOSITE
+    direction: str = "FORWARD"  # FORWARD, OPPOSITE (WRONG-WAY), NORTH, SOUTH
     estimated_speed_kmh: float = 4.2  # Toy-car / uncalibrated CV speed
     is_calibrated_speed: bool = False  # Marked ESTIMATED unless calibrated
     lane: int = 1
     timestamp: float = Field(default_factory=time.time)
     is_hazard: bool = False
     hazard_reason: Optional[str] = None
+    is_stationary: bool = False
+    stationary_duration_seconds: float = 0.0
+    is_toppled: bool = False
+    trajectory_points: List[List[float]] = Field(default_factory=list)

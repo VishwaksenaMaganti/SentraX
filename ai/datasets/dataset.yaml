@@ -1,0 +1,21 @@
+# SentraX Road Perception Dataset Configuration (YOLO Format)
+# Root path relative to training script or absolute
+path: ../datasets
+train: images/train
+val: images/val
+test: images/test
+
+# 12 Target Classes
+names:
+  0: car
+  1: motorcycle
+  2: bus
+  3: truck
+  4: bicycle
+  5: auto_rickshaw
+  6: pedestrian
+  7: animal
+  8: emergency_vehicle
+  9: pothole
+  10: crashed_vehicle
+  11: road_obstruction

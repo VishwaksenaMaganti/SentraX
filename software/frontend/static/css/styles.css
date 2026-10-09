@@ -2157,4 +2157,124 @@ header.top-header {
   left: 18px;
 }
 
+/* ==============================================================
+   REAL-TIME CORRIDOR INCIDENT ALERT BANNER & SCENARIO TOOLBAR
+   ============================================================== */
+.live-incident-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  margin-bottom: 4px;
+  transition: all 0.3s ease;
+}
+
+.live-incident-banner.clear {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.live-incident-banner.clear .incident-banner-title {
+  color: #10b981;
+}
+
+.live-incident-banner.critical {
+  background: rgba(239, 68, 68, 0.16);
+  border: 2px solid #ef4444;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.35);
+  animation: banner-pulse 1.8s infinite;
+}
+
+.live-incident-banner.critical .incident-banner-title {
+  color: #f87171;
+}
+
+.live-incident-banner.warning {
+  background: rgba(245, 158, 11, 0.16);
+  border: 2px solid #f59e0b;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.30);
+  animation: banner-pulse-amber 2.0s infinite;
+}
+
+.live-incident-banner.warning .incident-banner-title {
+  color: #fbbf24;
+}
+
+.incident-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.incident-banner-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.incident-banner-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.incident-banner-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.incident-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.incident-banner-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.live-incident-banner.clear .incident-banner-badge {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.live-incident-banner.critical .incident-banner-badge {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.live-incident-banner.warning .incident-banner-badge {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+@keyframes banner-pulse {
+  0% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.25); }
+  50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.55); border-color: #ff4d4d; }
+  100% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.25); }
+}
+
+@keyframes banner-pulse-amber {
+  0% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(245, 158, 11, 0.45); border-color: #fbbf24; }
+  100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.2); }
+}
+
+.pill-btn {
+  transition: all 0.2s ease;
+}
+.pill-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.2);
+}
+
 

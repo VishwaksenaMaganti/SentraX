@@ -59,6 +59,17 @@ class RecommendationEngine:
             rec_speed = min(rec_speed, pothole_speed)
             reasons.append(f"Road surface potholes detected ({telemetry.cv_pothole_count}) - reduce speed")
 
+        # 6. High Risk Score Ceiling
+        if telemetry.risk_score >= 80:
+            rec_speed = min(rec_speed, 20.0)
+            reasons.append(f"Critical risk level ({telemetry.risk_score}/100) - crawl speed advisory 20 km/h")
+        elif telemetry.risk_score >= 60:
+            rec_speed = min(rec_speed, 40.0)
+            reasons.append(f"High risk level ({telemetry.risk_score}/100) - advisory 40 km/h")
+        elif telemetry.risk_score >= 40:
+            rec_speed = min(rec_speed, 60.0)
+            reasons.append(f"Moderate risk level ({telemetry.risk_score}/100) - advisory 60 km/h")
+
         if not reasons:
             reasons.append("Clear roadway and optimal weather - normal advisory 80 km/h")
 

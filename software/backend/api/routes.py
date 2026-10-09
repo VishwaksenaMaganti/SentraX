@@ -12,7 +12,12 @@ import time
 from software.backend.schemas.telemetry import (
     CanonicalTelemetry, DeviceStatus, ConnectionState, RoadCondition, TrafficLevel, DeviceSource
 )
-from software.backend.schemas.events import CanonicalEvent, EventType, EventSeverity
+from software.backend.schemas.events import (
+    CanonicalEvent, CameraEvent, SensorEvent, FusedEvent,
+    EventType, EventSeverity, MatchStatus, DetectionMode
+)
+from software.backend.engines.fusion_engine import fusion_engine
+from software.backend.cv.camera_service import CameraService
 from software.backend.schemas.hazards import HazardZone, PotholeRecord
 from software.backend.schemas.routes import RouteHealthRequest, RouteHealthResponse
 from software.backend.schemas.recommendations import SpeedRecommendation, VehicleTypeRecommendation
@@ -723,7 +728,7 @@ async def set_scenario(scenario: str = Body(..., embed=True)):
 
 
 # =====================================================================
-# COMPUTER VISION FEED & METRICS
+# COMPUTER VISION FEED, DEVICES & METRICS
 # =====================================================================
 @router.get("/cv/stats")
 def get_cv_stats():
@@ -733,13 +738,406 @@ def get_cv_stats():
 
 
 @router.get("/cv/feed")
+@router.get("/cv/stream")
 def get_cv_feed():
-    def frame_generator():
-        while True:
-            if cv_pipeline_instance and cv_pipeline_instance.last_frame_jpeg:
-                frame_bytes = cv_pipeline_instance.last_frame_jpeg
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            time.sleep(0.08)
+    """Serves real-time annotated MJPEG stream from Phone Camera / Webcam."""
+    if cv_pipeline_instance:
+        return StreamingResponse(
+            cv_pipeline_instance.generate_mjpeg_stream(),
+            media_type="multipart/x-mixed-replace; boundary=frame"
+        )
+    return Response(content="CV Service Offline", status_code=503)
 
-    return StreamingResponse(frame_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+@router.get("/cv/devices")
+def list_available_video_devices(refresh: bool = False):
+    """Enumerates available webcam and video capture devices on Windows."""
+    return CameraService.list_available_cameras(force_refresh=refresh)
+
+
+@router.get("/cv/config")
+def get_cv_config():
+    """Returns camera source, virtual speed lines calibration, and demo mode."""
+    if cv_pipeline_instance:
+        stats = cv_pipeline_instance.get_summary_stats()
+        return {
+            "camera_source": stats.get("camera_source", "0"),
+            "device_name": stats.get("device_name", "Webcam"),
+            "demo_mode": stats.get("demo_mode", True),
+            "stall_threshold_seconds": stats.get("stall_threshold_seconds", 5.0),
+            "speed_calibration": stats.get("speed_calibration", {
+                "line_a_y": 140, "line_b_y": 260, "distance_meters": 0.30
+            })
+        }
+    return {}
+
+
+@router.post("/cv/config")
+def update_cv_config(payload: Dict[str, Any] = Body(...)):
+    """Updates camera source, virtual speed calibration, or demo mode."""
+    if not cv_pipeline_instance:
+        raise HTTPException(status_code=500, detail="CV pipeline unavailable")
+
+    if "camera_source" in payload:
+        cv_pipeline_instance.set_source(str(payload["camera_source"]))
+
+    if "speed_calibration" in payload:
+        cal = payload["speed_calibration"]
+        cv_pipeline_instance.set_calibration(
+            line_a_y=cal.get("line_a_y", 140),
+            line_b_y=cal.get("line_b_y", 260),
+            distance_meters=cal.get("distance_meters", 0.30)
+        )
+
+    if "demo_mode" in payload:
+        cv_pipeline_instance.set_demo_mode(bool(payload["demo_mode"]))
+
+    return {"status": "updated", "config": cv_pipeline_instance.get_summary_stats()}
+
+
+# =====================================================================
+# SENSOR-CAMERA FUSION & TEST MATRIX (Sections 14, 17, 31, 43)
+# =====================================================================
+@router.get("/fusion/status")
+def get_fusion_status():
+    """Returns active detection mode, latest fused event, and match status."""
+    latest_evt = fusion_engine.active_fused_events[0] if fusion_engine.active_fused_events else None
+    return {
+        "detection_mode": fusion_engine.get_detection_mode().value,
+        "active_events_count": len(fusion_engine.active_fused_events),
+        "latest_fused_event": latest_evt.model_dump() if latest_evt else None,
+        "matching_window_seconds": fusion_engine.matching_window_seconds
+    }
+
+
+@router.post("/fusion/mode")
+def set_fusion_mode(mode: str = Body(..., embed=True)):
+    """Switches detection mode: FUSION, SENSOR, or CAMERA."""
+    try:
+        det_mode = DetectionMode(mode.upper())
+        fusion_engine.set_detection_mode(det_mode)
+        return {"status": "updated", "detection_mode": det_mode.value}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid mode. Choose from: FUSION, SENSOR, CAMERA")
+
+
+@router.get("/fusion/table")
+def get_fusion_table():
+    """Returns the live 5-column dashboard fusion table (Section 17)."""
+    tele = simulator_instance.telemetry if simulator_instance else CanonicalTelemetry()
+    cv_stats = cv_pipeline_instance.get_summary_stats() if cv_pipeline_instance else {}
+    return fusion_engine.get_dashboard_fusion_table(tele, cv_stats)
+
+
+@router.post("/cv/trigger-test")
+async def trigger_test_case(test_case: int = Body(..., embed=True)):
+    """
+    Direct interactive trigger covering all 13 required test cases in Section 43.
+    """
+    if not (1 <= test_case <= 14):
+        raise HTTPException(status_code=400, detail="Test case must be between 1 and 14")
+
+    now = time.time()
+    tele = simulator_instance.telemetry.model_copy(deep=True) if simulator_instance else CanonicalTelemetry()
+    tele.timestamp = now
+    tele.is_simulated = True
+
+    # Base reset
+    tele.collision = False
+    tele.wrong_way = False
+    tele.stalled_vehicle = False
+    tele.sound_active = False
+    tele.road_condition = RoadCondition.DRY
+    tele.moisture_raw = 3100
+    tele.ir_sensors = [False, False, False, False]
+    tele.measured_speed_kmh = 0.0
+
+    cv_stats = {
+        "vehicle_count": 0,
+        "pothole_count": 0,
+        "stopped_vehicle_count": 0,
+        "wrong_way_count": 0,
+        "average_speed_kmh": 0.0,
+        "camera_events": []
+    }
+
+    test_title = ""
+
+    if test_case == 1:
+        # TEST 1: Camera detects moving vehicle + Sensor detects vehicle -> VEHICLE CONFIRMED
+        test_title = "TEST 1: VEHICLE CONFIRMED"
+        tele.ir_sensors = [True, False, False, False]
+        tele.measured_speed_kmh = 4.2
+        cv_stats["vehicle_count"] = 1
+        cv_stats["average_speed_kmh"] = 4.4
+        cv_stats["camera_events"] = [{
+            "type": EventType.VEHICLE_DETECTED.value,
+            "timestamp": now,
+            "confidence": 0.94,
+            "tracking_id": "CAM-001",
+            "speed": 4.4
+        }]
+
+    elif test_case == 2:
+        # TEST 2: Camera vehicle stationary for 5 seconds in DEMO mode -> CAMERA STALLED
+        test_title = "TEST 2: CAMERA STALLED (DEMO 5s)"
+        cv_stats["vehicle_count"] = 1
+        cv_stats["stopped_vehicle_count"] = 1
+        cv_stats["camera_events"] = [{
+            "type": EventType.STALLED.value,
+            "timestamp": now,
+            "confidence": 0.94,
+            "tracking_id": "CAM-001",
+            "speed": 0.0
+        }]
+
+    elif test_case == 3:
+        # TEST 3: Sensor stalled event + camera stalled event -> STALLED CONFIRMED
+        test_title = "TEST 3: STALLED CONFIRMED"
+        tele.stalled_vehicle = True
+        tele.ir_sensors = [True, False, False, False]
+        cv_stats["vehicle_count"] = 1
+        cv_stats["stopped_vehicle_count"] = 1
+        cv_stats["camera_events"] = [{
+            "type": EventType.STALLED.value,
+            "timestamp": now,
+            "confidence": 0.96,
+            "tracking_id": "CAM-001",
+            "speed": 0.0
+        }]
+
+    elif test_case == 4:
+        # TEST 4: Camera vehicle moves again before timer expires -> NO STALLED EVENT
+        test_title = "TEST 4: NO STALLED EVENT (VEHICLE MOVED)"
+        cv_stats["vehicle_count"] = 1
+        cv_stats["stopped_vehicle_count"] = 0
+        cv_stats["average_speed_kmh"] = 3.5
+        cv_stats["camera_events"] = [{
+            "type": EventType.VEHICLE_DETECTED.value,
+            "timestamp": now,
+            "confidence": 0.92,
+            "tracking_id": "CAM-001",
+            "speed": 3.5
+        }]
+
+    elif test_case == 5:
+        # TEST 5: Camera detects wrong-way -> CAMERA WRONG-WAY
+        test_title = "TEST 5: CAMERA WRONG-WAY"
+        cv_stats["vehicle_count"] = 1
+        cv_stats["wrong_way_count"] = 1
+        cv_stats["average_speed_kmh"] = 4.0
+        cv_stats["camera_events"] = [{
+            "type": EventType.WRONG_WAY.value,
+            "timestamp": now,
+            "confidence": 0.95,
+            "tracking_id": "CAM-002",
+            "speed": 4.0
+        }]
+
+    elif test_case == 6:
+        # TEST 6: Sensor wrong-way + camera wrong-way -> WRONG-WAY CONFIRMED
+        test_title = "TEST 6: WRONG-WAY CONFIRMED"
+        tele.wrong_way = True
+        cv_stats["vehicle_count"] = 1
+        cv_stats["wrong_way_count"] = 1
+        cv_stats["average_speed_kmh"] = 4.0
+        cv_stats["camera_events"] = [{
+            "type": EventType.WRONG_WAY.value,
+            "timestamp": now,
+            "confidence": 0.96,
+            "tracking_id": "CAM-002",
+            "speed": 4.0
+        }]
+
+    elif test_case == 7:
+        # TEST 7: Camera detects collision candidate -> POSSIBLE COLLISION
+        test_title = "TEST 7: POSSIBLE COLLISION (CANDIDATE)"
+        cv_stats["vehicle_count"] = 2
+        cv_stats["camera_events"] = [{
+            "type": EventType.POSSIBLE_COLLISION.value,
+            "timestamp": now,
+            "confidence": 0.75,
+            "tracking_id": "CAM-001+CAM-002",
+            "is_candidate": True,
+            "speed": 0.0
+        }]
+
+    elif test_case == 8:
+        # TEST 8: Camera collision + physical sound sensor collision -> COLLISION CONFIRMED
+        test_title = "TEST 8: COLLISION CONFIRMED"
+        tele.collision = True
+        tele.sound_active = True
+        cv_stats["vehicle_count"] = 2
+        cv_stats["stopped_vehicle_count"] = 2
+        cv_stats["camera_events"] = [{
+            "type": EventType.COLLISION.value,
+            "timestamp": now,
+            "confidence": 0.98,
+            "tracking_id": "CAM-001+CAM-002",
+            "is_candidate": False,
+            "speed": 0.0
+        }]
+
+    elif test_case == 9:
+        # TEST 9: Sensor collision only -> SENSOR-ONLY COLLISION
+        test_title = "TEST 9: SENSOR-ONLY COLLISION"
+        tele.collision = True
+        tele.sound_active = True
+        cv_stats["vehicle_count"] = 1
+        cv_stats["stopped_vehicle_count"] = 0
+
+    elif test_case == 10:
+        # TEST 10: Camera collision only -> CAMERA-ONLY COLLISION
+        test_title = "TEST 10: CAMERA-ONLY COLLISION"
+        cv_stats["vehicle_count"] = 2
+        cv_stats["stopped_vehicle_count"] = 2
+        cv_stats["camera_events"] = [{
+            "type": EventType.COLLISION.value,
+            "timestamp": now,
+            "confidence": 0.94,
+            "tracking_id": "CAM-001+CAM-002",
+            "is_candidate": False,
+            "speed": 0.0
+        }]
+
+    elif test_case == 11:
+        # TEST 11: Sensor says normal, camera says wrong-way -> MISMATCH
+        test_title = "TEST 11: SENSOR-CAMERA MISMATCH (WRONG-WAY)"
+        tele.wrong_way = False
+        cv_stats["vehicle_count"] = 1
+        cv_stats["wrong_way_count"] = 1
+        cv_stats["camera_events"] = [{
+            "type": EventType.WRONG_WAY.value,
+            "timestamp": now,
+            "confidence": 0.94,
+            "tracking_id": "CAM-003",
+            "speed": 4.1
+        }]
+
+    elif test_case == 12:
+        # TEST 12: Wet-road sensor detects moisture, camera cannot measure moisture -> SENSOR-ONLY WET ROAD
+        test_title = "TEST 12: SENSOR-ONLY WET ROAD"
+        tele.road_condition = RoadCondition.WET
+        tele.moisture_raw = 1450  # < 2000 is wet
+
+    elif test_case == 13:
+        # TEST 13: Camera detects pothole, no physical sensor -> CAMERA-ONLY POTHOLE
+        test_title = "TEST 13: CAMERA-ONLY POTHOLE"
+        cv_stats["pothole_count"] = 2
+
+    elif test_case == 14:
+        # TEST 14: Camera vehicle toppled / rolled over -> VEHICLE TOPPLED OVER
+        test_title = "TEST 14: VEHICLE TOPPLED OVER (ROLLOVER)"
+        cv_stats["vehicle_count"] = 1
+        cv_stats["stopped_vehicle_count"] = 1
+        cv_stats["toppled_vehicle_count"] = 1
+        cv_stats["camera_events"] = [{
+            "type": EventType.VEHICLE_TOPPLED.value,
+            "timestamp": now,
+            "confidence": 0.96,
+            "tracking_id": "CAM-001",
+            "speed": 0.0
+        }]
+
+    # Execute fusion
+    fused_tele, new_events = fusion_engine.fuse(tele, cv_stats)
+    if simulator_instance:
+        simulator_instance.telemetry = fused_tele
+        simulator_instance.current_scenario = test_title
+        if hasattr(simulator_instance, "broadcast_callback") and simulator_instance.broadcast_callback:
+            evt = new_events[0] if new_events else None
+            await simulator_instance.broadcast_callback(fused_tele, evt)
+
+    table = fusion_engine.get_dashboard_fusion_table(fused_tele, cv_stats)
+
+    return {
+        "status": "triggered",
+        "test_case": test_case,
+        "test_title": test_title,
+        "fused_telemetry": fused_tele.model_dump(),
+        "new_fused_events": [e.model_dump() for e in new_events],
+        "fusion_table": table
+    }
+
+
+@router.get("/cv/roi")
+def get_road_roi():
+    """Returns current Road Region of Interest (ROI) configuration."""
+    if cv_pipeline_instance and hasattr(cv_pipeline_instance, "camera_service"):
+        det = cv_pipeline_instance.camera_service.detector
+        return {
+            "y_min": det.roi_y_min,
+            "y_max": det.roi_y_max,
+            "x_min": det.roi_x_min,
+            "x_max": det.roi_x_max,
+            "enabled": det.roi_enabled
+        }
+    return {"y_min": 0.16, "y_max": 0.84, "x_min": 0.03, "x_max": 0.97, "enabled": True}
+
+
+@router.post("/cv/roi")
+def set_road_roi(
+    y_min: float = Body(0.16, embed=True),
+    y_max: float = Body(0.84, embed=True),
+    x_min: float = Body(0.03, embed=True),
+    x_max: float = Body(0.97, embed=True),
+    enabled: bool = Body(True, embed=True)
+):
+    """Configures Road Region of Interest (ROI) to exclude jumper wires, breadboards, and background noise."""
+    if cv_pipeline_instance and hasattr(cv_pipeline_instance, "camera_service"):
+        cv_pipeline_instance.camera_service.detector.set_roi(y_min, y_max, x_min, x_max, enabled)
+        return {"status": "updated", "roi": {"y_min": y_min, "y_max": y_max, "x_min": x_min, "x_max": x_max, "enabled": enabled}}
+    raise HTTPException(status_code=500, detail="CV pipeline unavailable")
+
+
+@router.post("/cv/simulate/toppled")
+def toggle_simulate_toppled(enable: Optional[bool] = Body(None, embed=True)):
+    """Toggles simulated vehicle topple / rollover state."""
+    if cv_pipeline_instance and hasattr(cv_pipeline_instance, "camera_service"):
+        cs = cv_pipeline_instance.camera_service
+        if enable is None:
+            cs.sim_toppled = not cs.sim_toppled
+        else:
+            cs.sim_toppled = bool(enable)
+        return {"status": "updated", "sim_toppled": cs.sim_toppled}
+    return {"status": "mocked"}
+
+
+# =====================================================================
+# SECTION 58 EXPLAINABILITY AUDIT & AI STATUS ENDPOINTS
+# =====================================================================
+@router.get("/fusion/explain/latest")
+def explain_latest_fusion_event():
+    """Returns 8-question forensic decision audit for latest fused incident."""
+    return fusion_engine.explain_event("latest")
+
+
+@router.get("/fusion/explain/{event_id}")
+def explain_specific_fusion_event(event_id: str):
+    """Returns 8-question forensic decision audit for a specific event ID."""
+    return fusion_engine.explain_event(event_id)
+
+
+@router.get("/ai/status")
+def get_ai_subsystem_status():
+    """Returns AI model training targets, inference engine state, and dataset schema."""
+    import json
+    from pathlib import Path
+    classes_path = Path("ai/models/classes.json")
+    classes_data = {}
+    if classes_path.exists():
+        try:
+            with open(classes_path, "r", encoding="utf-8") as f:
+                classes_data = json.load(f)
+        except Exception:
+            pass
+
+    return {
+        "ai_architecture": "YOLO-family multi-class detector + Centroid temporal tracker",
+        "supported_classes": classes_data.get("classes", []),
+        "inference_engine": "Ultralytics PyTorch / ONNX / Geometric Contour Fallback",
+        "is_ready_for_training": Path("ai/datasets/dataset.yaml").exists(),
+        "training_script": "ai/training/train_detector.py",
+        "collector_script": "ai/datasets/data_collector.py"
+    }
+

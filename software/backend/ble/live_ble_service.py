@@ -120,14 +120,30 @@ class LiveBLEManager:
                     details=None
                 )
 
-            self.client = BleakClient(
-                device_target,
-                disconnected_callback=self._on_disconnected,
-                winrt={"use_cached_services": False}
-            )
-            await self.client.connect(timeout=10.0)
+            if self.client:
+                try:
+                    await self.client.disconnect()
+                except Exception:
+                    pass
 
-            if self.client.is_connected:
+            connected = False
+            for attempt in range(1, 3):
+                try:
+                    self.client = BleakClient(
+                        device_target,
+                        disconnected_callback=self._on_disconnected,
+                        winrt={"use_cached_services": False}
+                    )
+                    await self.client.connect(timeout=8.0)
+                    if self.client.is_connected:
+                        connected = True
+                        break
+                except Exception as ce:
+                    logger.warning("BLE connect attempt %d failed: %s", attempt, ce)
+                    if attempt == 1:
+                        await asyncio.sleep(1.0)
+
+            if connected and self.client and self.client.is_connected:
                 self.is_connected = True
                 self.connected_device_address = target_address
                 logger.info("Successfully connected to physical ESP32 over BLE!")
