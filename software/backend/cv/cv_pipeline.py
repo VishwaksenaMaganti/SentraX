@@ -1,122 +1,65 @@
 """
 SentraX Real-Time Computer Vision Pipeline
-Streams frames from webcam/phone camera or generates synthetic scene feeds,
-runs detection, tracking, pothole recognition, and exports fused CV telemetry metrics.
+Wraps and interfaces CameraService, Detector, Tracker, and EventEngine
+to provide live CV telemetry, tracking metrics, and streaming to SentraX backend.
 """
 
-import asyncio
-import time
-import base64
 from typing import Dict, Any, List, Optional
-import numpy as np
-
-from software.backend.cv.detector import RoadObjectDetector
-from software.backend.cv.tracker import CentroidTracker
-from software.backend.cv.pothole_detector import PotholeDetector
-from software.backend.schemas.hazards import VehicleTrack, PotholeRecord
-
-try:
-    import cv2
-    CV2_AVAILABLE = True
-except ImportError:
-    CV2_AVAILABLE = False
+from software.backend.cv.camera_service import CameraService
+from software.backend.schemas.hazards import VehicleTrack
+from software.backend.schemas.events import CameraEvent
 
 
 class CVPipeline:
-    def __init__(self, camera_index: int = -1, use_simulation: bool = True):
-        self.use_simulation = use_simulation
-        self.camera_index = camera_index
-        self.detector = RoadObjectDetector()
-        self.tracker = CentroidTracker()
-        self.pothole_detector = PotholeDetector()
-        self.cap = None
+    def __init__(self, camera_index: Any = None, use_simulation: bool = False):
+        self.camera_service = CameraService(camera_source=camera_index)
 
-        self.last_frame_jpeg: Optional[bytes] = None
-        self.current_tracks: List[VehicleTrack] = []
-        self.current_potholes: List[PotholeRecord] = []
-        self.is_running = False
+    @property
+    def is_running(self) -> bool:
+        return self.camera_service.is_running
 
-        # Simulation scene triggers
-        self.sim_vehicles = 2
-        self.sim_pothole = False
-        self.sim_wrong_way = False
-        self.sim_wet = False
+    @property
+    def last_frame_jpeg(self) -> Optional[bytes]:
+        return self.camera_service.last_jpeg_bytes
+
+    @property
+    def current_tracks(self) -> List[VehicleTrack]:
+        return self.camera_service.current_tracks
+
+    @property
+    def current_camera_events(self) -> List[CameraEvent]:
+        return self.camera_service.current_camera_events
 
     def start(self):
-        self.is_running = True
-        if not self.use_simulation and CV2_AVAILABLE and self.camera_index >= 0:
-            self.cap = cv2.VideoCapture(self.camera_index)
-            if not self.cap.isOpened():
-                self.use_simulation = True
+        self.camera_service.start()
 
     def stop(self):
-        self.is_running = False
-        if self.cap:
-            self.cap.release()
-            self.cap = None
+        self.camera_service.stop()
 
     def process_step(self) -> Dict[str, Any]:
-        """Runs one vision cycle and returns telemetry metadata."""
-        if not self.is_running:
-            return self.get_summary_stats()
-
-        frame = None
-        if not self.use_simulation and self.cap:
-            ret, frame = self.cap.read()
-            if not ret:
-                frame = None
-
-        if frame is None:
-            # Fall back to synthetic road scene
-            frame = self.detector.generate_synthetic_frame(
-                vehicles=self.sim_vehicles,
-                with_pothole=self.sim_pothole,
-                with_wrong_way=self.sim_wrong_way,
-                with_wet=self.sim_wet
-            )
-
-        # 1. Object detection & tracking
-        detections = self.detector.detect(frame)
-        self.current_tracks = self.tracker.update(detections)
-
-        # 2. Pothole detection
-        if self.sim_pothole or not self.use_simulation:
-            potholes = self.pothole_detector.detect_in_frame(frame)
-            if potholes:
-                self.current_potholes = potholes
-
-        # 3. Annotate frame for dashboard display
-        annotated = frame.copy()
-        for trk in self.current_tracks:
-            x, y, w, h = trk.bbox
-            color = (0, 0, 255) if trk.is_hazard else (0, 255, 0)
-            cv2.rectangle(annotated, (x, y), (x + w, y + h), color, 2)
-            label = f"#{trk.track_id} {trk.vehicle_class} {trk.estimated_speed_kmh}km/h (EST)"
-            cv2.putText(annotated, label, (x, max(15, y - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
-
-        # Annotate potholes
-        for pot in self.current_potholes:
-            cv2.putText(annotated, "POTHOLE AHEAD", (180, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 140, 255), 2)
-
-        # Encode frame to JPEG
-        _, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 75])
-        self.last_frame_jpeg = buffer.tobytes()
-
-        return self.get_summary_stats()
+        """Returns the latest vision telemetry snapshot."""
+        return self.camera_service.get_summary_stats()
 
     def get_summary_stats(self) -> Dict[str, Any]:
-        stopped = sum(1 for t in self.current_tracks if t.estimated_speed_kmh < 0.5)
-        wrong = sum(1 for t in self.current_tracks if t.direction == "OPPOSITE")
-        speeds = [t.estimated_speed_kmh for t in self.current_tracks if t.estimated_speed_kmh > 0]
-        avg_speed = round(sum(speeds) / len(speeds), 1) if speeds else 0.0
+        return self.camera_service.get_summary_stats()
 
-        return {
-            "vehicle_count": len(self.current_tracks),
-            "pothole_count": len(self.current_potholes),
-            "stopped_vehicle_count": stopped,
-            "wrong_way_count": wrong,
-            "wet_surface_detected": self.sim_wet,
-            "average_speed_kmh": avg_speed,
-            "tracks": [t.dict() for t in self.current_tracks],
-            "potholes": [p.dict() for p in self.current_potholes]
-        }
+    def set_source(self, source_str: str) -> bool:
+        return self.camera_service.set_source(source_str)
+
+    def set_calibration(self, line_a_y: int, line_b_y: int, distance_meters: float):
+        self.camera_service.set_calibration(line_a_y, line_b_y, distance_meters)
+
+    def set_demo_mode(self, enabled: bool):
+        self.camera_service.set_demo_mode(enabled)
+
+    def set_detector_backend(self, backend: str) -> bool:
+        return self.camera_service.set_detector_backend(backend)
+
+    def get_vehicle_log(self) -> Dict[str, Any]:
+        return self.camera_service.get_vehicle_log()
+
+    def get_vehicle_snapshot(self, label: str) -> Optional[bytes]:
+        return self.camera_service.vehicle_log.snapshot(label)
+
+    def generate_mjpeg_stream(self):
+        return self.camera_service.generate_mjpeg_stream()

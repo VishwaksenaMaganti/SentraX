@@ -70,6 +70,7 @@ class CanonicalTelemetry(BaseModel):
     collision: bool = False
     wrong_way: bool = False
     stalled_vehicle: bool = False
+    vehicle_toppled: bool = False
     emergency_vehicle: bool = False
 
     # Environmental sensors
@@ -88,7 +89,6 @@ class CanonicalTelemetry(BaseModel):
 
     # Computer Vision observations
     cv_vehicle_count: int = 0
-    cv_pothole_count: int = 0
     hazard_count: int = 0
 
     # Risk Analysis

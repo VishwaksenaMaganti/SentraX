@@ -62,7 +62,6 @@ def init_db():
             rfid_active INTEGER,
             night_mode INTEGER,
             cv_vehicle_count INTEGER,
-            cv_pothole_count INTEGER,
             hazard_count INTEGER,
             risk_score INTEGER,
             risk_reasons TEXT,
@@ -101,7 +100,6 @@ def init_db():
             health_band TEXT,
             color_hex TEXT,
             recommended_speed_kmh REAL,
-            pothole_count INTEGER,
             collision_count INTEGER,
             wet INTEGER,
             traffic_density TEXT,
@@ -125,22 +123,6 @@ def init_db():
             expires_at REAL,
             source TEXT,
             is_active INTEGER,
-            is_simulated INTEGER
-        );
-        """)
-
-        # 6. Potholes
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS potholes (
-            id TEXT PRIMARY KEY,
-            latitude REAL NOT NULL,
-            longitude REAL NOT NULL,
-            severity TEXT NOT NULL,
-            confidence REAL,
-            timestamp REAL,
-            image_reference TEXT,
-            road_health_impact INTEGER,
-            verified_by_cv INTEGER,
             is_simulated INTEGER
         );
         """)
@@ -173,7 +155,6 @@ def init_db():
             overall_health_band TEXT,
             overall_risk_score INTEGER,
             recommended_speed_kmh REAL,
-            pothole_count INTEGER,
             collision_zones_count INTEGER,
             created_at REAL
         );

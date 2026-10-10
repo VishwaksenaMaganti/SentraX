@@ -23,11 +23,11 @@ To preserve scientific rigor and intellectual honesty, this document distinguish
 | **SQLite Event & Data Logging** | Software Platform | Persistent thread-safe DB | 11 relational tables storing telemetry and events |
 | **Road Risk Scoring (0-100)** | Software Platform | Real-time weighted algorithm | Clamped 0-100 score with explicit reasons list |
 | **Road Health Scoring (0-100)** | Software Platform | Corridor evaluation model | Bands: GOOD, MODERATE, POOR, CRITICAL |
-| **Phone-Camera Computer Vision** | Software Platform | OpenCV tracking pipeline | Vehicle detection, trajectory, pothole detection, estimated speed |
+| **Phone-Camera Computer Vision** | Software Platform | OpenCV tracking pipeline | Vehicle detection, trajectory, size-based speed, snapshots, visual emergency vehicle recognition |
 | **Sensor + Vision Data Fusion** | Software Platform | Weighted confidence engine | Multi-modal incident validation |
 | **Google Maps Navigation** | Software Platform | Routes API + Mock Provider | Color-coded segmented route health |
 | **Adaptive Speed Recommendations**| Software Platform | Priority safety engine | Advisory speed recommendations (NOT legal limits) |
-| **One-Click Expo Demo Engine** | Software Platform | 9-step automated walkthrough | Offline simulation for exhibitions & demos |
+| **One-Click Expo Demo Engine** | Software Platform | 8-step automated walkthrough | Offline simulation for exhibitions & demos |
 | **Edge mmWave Radar Sensors** | Future Scope | Not in current prototype | Intended for all-weather velocity tracking |
 | **Dedicated V2X (DSRC / C-V2X)** | Future Scope | Not in current prototype | Direct vehicle-to-infrastructure messaging |
 | **On-Vehicle Safety HUD Unit** | Future Scope | Not in current prototype | In-car dash receiver for advisory alerts |

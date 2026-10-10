@@ -1,7 +1,7 @@
 # SentraX Phone-Camera Computer Vision Subsystem
 
 ## 1. Overview
-The Computer Vision subsystem serves as an independent perception channel that complements embedded microcontrollers. A roadside camera or smartphone camera mounted overlooking the road track tracks physical vehicular traffic, detects potholes, and flags safety anomalies.
+The Computer Vision subsystem serves as an independent perception channel that complements embedded microcontrollers. A roadside camera or smartphone camera mounted overlooking the road track tracks physical vehicular traffic, measures speed, recognises emergency vehicles by their lights and look, and flags safety anomalies.
 
 ## 2. Capabilities
 - **Object Detection**: Identifies Cars, Trucks, Buses, Motorcycles, Bicycles, Pedestrians, and Animals.
@@ -9,7 +9,8 @@ The Computer Vision subsystem serves as an independent perception channel that c
 - **Direction Estimation**: Flags wrong-way traffic moving opposite to designated corridor flow.
 - **Speed Estimation**: Approximates toy vehicle speed from pixel displacement.
   * *Important Note*: All camera-derived speeds are explicitly labeled **ESTIMATED (Uncalibrated)** to maintain rigorous scientific integrity.
-- **Pothole Detection**: Detects surface depressions using adaptive thresholding and contour circularity filters.
+- **Emergency Vehicle Recognition**: Flashing red/blue beacons, red-and-blue light bars, and the open-vocabulary detector's ambulance / police car labels. No audio needed.
+- **Vehicle Snapshots & Speed**: A snapshot is taken when a vehicle enters the frame; its speed is measured from the toy car's known size (7.5 cm) and shown in the mobile app's Camera AI panel.
 - **Stationary Vehicle Flagging**: Identifies stalled vehicles that remain immobile for &gt; 3 seconds.
 
 ## 3. Sensor + Vision Data Fusion

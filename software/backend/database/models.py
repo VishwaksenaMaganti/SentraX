@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Any
 from software.backend.database.connection import get_db_connection
 from software.backend.schemas.telemetry import CanonicalTelemetry, DeviceStatus, ConnectionState
 from software.backend.schemas.events import CanonicalEvent, EventType, EventSeverity
-from software.backend.schemas.hazards import HazardZone, PotholeRecord, VehicleTrack
+from software.backend.schemas.hazards import HazardZone, VehicleTrack
 
 
 def save_telemetry(t: CanonicalTelemetry) -> int:
@@ -19,9 +19,9 @@ def save_telemetry(t: CanonicalTelemetry) -> int:
             device_id, timestamp, measured_speed_kmh, recommended_speed_kmh, posted_speed_kmh,
             traffic_count, traffic_level, road_condition, collision, wrong_way,
             stalled_vehicle, emergency_vehicle, temperature_c, humidity_pct, moisture_raw,
-            sound_active, rfid_active, night_mode, cv_vehicle_count, cv_pothole_count,
+            sound_active, rfid_active, night_mode, cv_vehicle_count,
             hazard_count, risk_score, risk_reasons, source, is_simulated
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             t.device_id, t.timestamp, t.measured_speed_kmh, t.recommended_speed_kmh, t.posted_speed_kmh,
             t.traffic_count, t.traffic_level.value, t.road_condition.value,
@@ -29,7 +29,7 @@ def save_telemetry(t: CanonicalTelemetry) -> int:
             1 if t.stalled_vehicle else 0, 1 if t.emergency_vehicle else 0,
             t.temperature_c, t.humidity_pct, t.moisture_raw,
             1 if t.sound_active else 0, 1 if t.rfid_active else 0,
-            1 if t.night_mode else 0, t.cv_vehicle_count, t.cv_pothole_count,
+            1 if t.night_mode else 0, t.cv_vehicle_count,
             t.hazard_count, t.risk_score, json.dumps(t.risk_reasons),
             t.source.value, 1 if t.is_simulated else 0
         ))
@@ -165,28 +165,4 @@ def get_active_hazards() -> List[Dict[str, Any]]:
         WHERE is_active = 1 AND (expires_at IS NULL OR expires_at > ?)
         ORDER BY created_at DESC;
         """, (now,))
-        return [dict(r) for r in cursor.fetchall()]
-
-
-def save_pothole(p: PotholeRecord) -> str:
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-        INSERT OR REPLACE INTO potholes (
-            id, latitude, longitude, severity, confidence, timestamp,
-            image_reference, road_health_impact, verified_by_cv, is_simulated
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            p.id, p.latitude, p.longitude, p.severity.value, p.confidence,
-            p.timestamp, p.image_reference, p.road_health_impact,
-            1 if p.verified_by_cv else 0, 1 if p.is_simulated else 0
-        ))
-        conn.commit()
-        return p.id
-
-
-def get_potholes(limit: int = 50) -> List[Dict[str, Any]]:
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM potholes ORDER BY timestamp DESC LIMIT ?;", (limit,))
         return [dict(r) for r in cursor.fetchall()]

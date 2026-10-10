@@ -5,8 +5,8 @@ SentraX is designed to be demonstrated anywhere without requiring active Wi-Fi, 
 
 All synthetic telemetry and vision feeds are clearly tagged **SIMULATED / SYNTHETIC**.
 
-## 2. One-Click 9-Step Automated Expo Demo
-Clicking **START 9-STEP EXPO DEMO** executes the complete sequence:
+## 2. One-Click 8-Step Automated Expo Demo
+Clicking **START 8-STEP EXPO DEMO** executes the complete sequence:
 
 1. **STEP 1: Normal Road (80 km/h)**
    - Road clear, all sensors normal, posted limit 80 km/h.
@@ -22,9 +22,7 @@ Clicking **START 9-STEP EXPO DEMO** executes the complete sequence:
    - Acoustic collision triggered, hazard zone generated.
 7. **STEP 7: RFID Emergency Vehicle**
    - Priority ambulance tag detected, 5 dual-beep cadence active.
-8. **STEP 8: Pothole Detected Ahead**
-   - CV confirms surface pothole, road health decreases.
-9. **STEP 9: Road Risk Score Increases**
+8. **STEP 8: Road Risk Score Increases**
    - Composite risk score increases to 88/100, displaying comprehensive breakdown.
 
 ## 3. Instant Manual Scenario Triggers
@@ -39,5 +37,4 @@ From the **Demo Simulation** tab or REST API, any individual scenario can be tri
 - `EMERGENCY`
 - `HIGH_TEMP`
 - `HIGH_HUMIDITY`
-- `POTHOLE`
 - `ANIMAL_HAZARD`

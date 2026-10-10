@@ -42,3 +42,10 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+# Downloaded pretrained YOLO weights and Ultralytics run output
+ai/models/*.pt
+runs/
+
+# Separate project, kept out of this repo
+rupeelens/

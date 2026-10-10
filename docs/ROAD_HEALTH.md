@@ -10,11 +10,10 @@ SentraX calculates a continuous composite health metric representing physical co
 |---|---|---|---|
 | **GOOD** | 85 – 100 | `#22c55e` (Green) | Smooth asphalt, no surface defects, clear visibility |
 | **MODERATE** | 65 – 84 | `#eab308` (Yellow) | Minor surface wear, occasional traffic slowdowns |
-| **POOR** | 40 – 64 | `#f97316` (Orange) | Pothole clusters, recurring waterlogging, rough surface |
+| **POOR** | 40 – 64 | `#f97316` (Orange) | Recurring incidents, waterlogging, rough surface |
 | **CRITICAL** | 0 – 39 | `#ef4444` (Red) | Severe damage, frequent collisions, major safety risk |
 
 ### Degradation Factors
-- **Potholes**: -15 points per major crater (capped at -45).
 - **Collision History**: -20 points per recorded impact blackspot (capped at -30).
 - **Wet Surface**: -10 points during standing water or precipitation.
 - **Persistent Congestion**: -10 points when traffic density remains high.
@@ -32,7 +31,6 @@ Measures instantaneous navigational hazard level facing drivers on the corridor:
 - **Near-Collision Trajectory**: +25
 - **Overspeed Violation**: +20
 - **Hazard Proximity**: +20
-- **Pothole Detected**: +15
 - **Wet Road Surface**: +15
 - **Corridor Congestion**: +10
 - **Elevated Temperature (&ge; 30°C)**: +5

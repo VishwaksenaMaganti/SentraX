@@ -36,7 +36,36 @@ enum AlertType {
 #define IR3_PIN 27
 #define IR4_PIN 33
 
+// IR presence logic. The testbed's IR modules pull their output HIGH when a vehicle is in
+// the beam, so HIGH = vehicle detected. (Previous firmware treated LOW as detected, which
+// showed every lane inverted.) Change to LOW to restore the old behaviour.
+#define IR_ACTIVE_LEVEL HIGH
+#define irDetected(pin) (digitalRead(pin) == IR_ACTIVE_LEVEL)
+
 #define SOUND_PIN 32
+
+// Sound / impact sensor filter. The module's digital output chatters on room noise, so a single
+// blip no longer counts. Every SOUND_BURST_EVERY_MS the pin is sampled for SOUND_BURST_US and the
+// share of "active" samples (0-100 %) is the sound level. A collision needs a loud level held for
+// SOUND_CONFIRM_BURSTS bursts (~0.6-1.5 s): only a sustained loud source such as a phone speaker
+// held against the mic gets there. Raise SOUND_TRIGGER_PCT (or send "SOUND:THRESHOLD:<pct>" over
+// Serial/BLE) to make it even harder to trigger.
+#define SOUND_BURST_US        4000
+#define SOUND_BURST_EVERY_MS  50
+#define SOUND_TRIGGER_PCT     40    // level a burst must reach to count as loud
+#define SOUND_MIN_MARGIN_PCT  30    // ...and at least this far above the quiet level learnt at boot
+#define SOUND_CONFIRM_BURSTS  12    // net loud bursts needed before a collision fires
+#define SOUND_COOLDOWN_MS     8000  // minimum gap between two sound-triggered collisions
+
+int soundIdleLevel = HIGH;      // pin level in a quiet room (learnt at boot, works for either polarity)
+int soundBaselinePct = 0;       // activity measured in the quiet room at boot
+int soundTriggerPct = SOUND_TRIGGER_PCT;
+int soundLevelPct = 0;          // latest burst level, reported in telemetry as "snd"
+int soundLoudScore = 0;
+bool soundConfirmed = false;    // reported in telemetry as "sound"
+bool soundRearmed = true;
+unsigned long lastSoundBurst = 0;
+unsigned long lastSoundTrigger = 0;
 
 #define DHT_PIN 13
 #define DHTTYPE DHT11
@@ -187,7 +216,6 @@ unsigned long speedDisplayStart = 0;
 bool nightMode = false;
 
 // Sensor states
-bool lastCollision = false;
 bool lastIR3 = false;
 bool lastIR4 = false;
 bool lastWet = false;
@@ -808,7 +836,7 @@ void checkCongestion() {
   };
 
   for (int i = 0; i < 4; i++) {
-    if (digitalRead(pins[i]) == LOW) {
+    if (irDetected(pins[i])) {
       occupied++;
     }
   }
@@ -855,7 +883,7 @@ void checkStalledVehicle() {
 
   int occupied = 0;
   for (int i = 0; i < 4; i++) {
-    if (digitalRead(pins[i]) == LOW) {
+    if (irDetected(pins[i])) {
       occupied++;
     }
   }
@@ -875,7 +903,7 @@ void checkStalledVehicle() {
   bool anyStalled = false;
 
   for (int i = 0; i < 4; i++) {
-    bool blocked = (digitalRead(pins[i]) == LOW);
+    bool blocked = irDetected(pins[i]);
 
     if (blocked) {
       if (!irStallActive[i]) {
@@ -924,8 +952,8 @@ void checkStalledVehicle() {
 // =====================================================
 
 void checkWrongWay() {
-  bool ir3 = (digitalRead(IR3_PIN) == LOW);
-  bool ir4 = (digitalRead(IR4_PIN) == LOW);
+  bool ir3 = irDetected(IR3_PIN);
+  bool ir4 = irDetected(IR4_PIN);
 
   if (ir3 && !lastIR3) {
     if (!ir4FirstDetected) {
@@ -957,6 +985,78 @@ void checkWrongWay() {
 // =====================================================
 // ULTRASONIC DISTANCE
 // =====================================================
+
+// =====================================================
+// SOUND / IMPACT SENSOR (filtered)
+// =====================================================
+
+// Share of samples (0-100 %) where the module output differs from its quiet level
+int sampleSoundActivityPct() {
+  unsigned long n = 0, active = 0;
+  unsigned long t0 = micros();
+  while (micros() - t0 < SOUND_BURST_US) {
+    n++;
+    if (digitalRead(SOUND_PIN) != soundIdleLevel) active++;
+  }
+  return n ? (int)((active * 100UL) / n) : 0;
+}
+
+// Learns the quiet level at boot. Keep the room quiet for the first second after power-on.
+void calibrateSoundSensor() {
+  unsigned long n = 0, high = 0;
+  unsigned long t0 = millis();
+  while (millis() - t0 < 600) {
+    n++;
+    if (digitalRead(SOUND_PIN) == HIGH) high++;
+    delayMicroseconds(200);
+  }
+  soundIdleLevel = (high * 2 >= n) ? HIGH : LOW;
+
+  int sum = 0;
+  for (int i = 0; i < 10; i++) {
+    sum += sampleSoundActivityPct();
+    delay(20);
+  }
+  soundBaselinePct = sum / 10;
+
+  Serial.print(F("[SOUND] Quiet level: "));
+  Serial.print(soundIdleLevel == HIGH ? "HIGH" : "LOW");
+  Serial.print(F(", quiet activity: "));
+  Serial.print(soundBaselinePct);
+  Serial.print(F("%, trigger at: "));
+  Serial.print(max(soundTriggerPct, soundBaselinePct + SOUND_MIN_MARGIN_PCT));
+  Serial.println(F("%"));
+}
+
+void checkSoundSensor() {
+  unsigned long now = millis();
+  if (now - lastSoundBurst < SOUND_BURST_EVERY_MS) return;
+  lastSoundBurst = now;
+
+  soundLevelPct = sampleSoundActivityPct();
+  int threshold = max(soundTriggerPct, soundBaselinePct + SOUND_MIN_MARGIN_PCT);
+  if (threshold > 95) threshold = 95;
+
+  // Loud bursts add a point, quiet ones take one away, so short blips and patchy room noise
+  // never build up; only a steady loud sound climbs to SOUND_CONFIRM_BURSTS.
+  if (soundLevelPct >= threshold) {
+    if (soundLoudScore < SOUND_CONFIRM_BURSTS * 2) soundLoudScore++;
+  } else if (soundLoudScore > 0) {
+    soundLoudScore--;
+  }
+
+  soundConfirmed = (soundLoudScore >= SOUND_CONFIRM_BURSTS);
+  if (soundLoudScore == 0) soundRearmed = true;  // sound has died away: allow the next trigger
+
+  if (soundConfirmed && soundRearmed && (now - lastSoundTrigger >= SOUND_COOLDOWN_MS)) {
+    soundRearmed = false;
+    lastSoundTrigger = now;
+    Serial.print(F("[SOUND] Sustained loud sound ("));
+    Serial.print(soundLevelPct);
+    Serial.println(F("%) -> COLLISION"));
+    triggerAlert(COLLISION);
+  }
+}
 
 float getDistance(int trig, int echo) {
   digitalWrite(trig, LOW);
@@ -1109,6 +1209,18 @@ void executeCommand(String cmd) {
         triggerAlert(RASH_DRIVING);
       }
     }
+  }
+  else if (cmd.startsWith("SOUND:THRESHOLD:")) {
+    int pct = cmd.substring(16).toInt();
+    if (pct >= 5 && pct <= 95) {
+      soundTriggerPct = pct;
+      Serial.print(F("[SOUND] Trigger level set to "));
+      Serial.print(pct);
+      Serial.println(F("%"));
+    }
+  }
+  else if (cmd.startsWith("SOUND:CALIBRATE")) {
+    calibrateSoundSensor();
   }
   else if (cmd.startsWith("CHECK:SPEED") || cmd.startsWith("SPEED:CHECK") || cmd.startsWith("CHECK:US")) {
     triggerManualSpeedCheck();
@@ -1271,8 +1383,9 @@ void setup() {
   pinMode(IR3_PIN, INPUT);
   pinMode(IR4_PIN, INPUT);
 
-  // 4. SOUND / COLLISION SENSOR (ACTIVE LOW)
+  // 4. SOUND / COLLISION SENSOR (polarity and quiet level learnt at boot)
   pinMode(SOUND_PIN, INPUT);
+  calibrateSoundSensor();
 
   // 5. MOISTURE SENSOR
   pinMode(MOISTURE_PIN, INPUT);
@@ -1333,12 +1446,8 @@ void loop() {
   // Stalled vehicle detection
   checkStalledVehicle();
 
-  // Collision / Sound sensor (ACTIVE LOW)
-  bool collision = (digitalRead(SOUND_PIN) == LOW);
-  if (collision && !lastCollision) {
-    triggerAlert(COLLISION);
-  }
-  lastCollision = collision;
+  // Collision / Sound sensor: fires only on a sustained loud sound (see checkSoundSensor)
+  checkSoundSensor();
 
   // Vehicle speed measurement (Ultrasonic sensors)
   checkVehicleSpeed();
@@ -1483,10 +1592,10 @@ void loop() {
   if (millis() - lastBLETelemetryTime >= 400) {
     lastBLETelemetryTime = millis();
 
-    int ir1 = (digitalRead(IR1_PIN) == LOW) ? 1 : 0;
-    int ir2 = (digitalRead(IR2_PIN) == LOW) ? 1 : 0;
-    int ir3 = (digitalRead(IR3_PIN) == LOW) ? 1 : 0;
-    int ir4 = (digitalRead(IR4_PIN) == LOW) ? 1 : 0;
+    int ir1 = irDetected(IR1_PIN) ? 1 : 0;
+    int ir2 = irDetected(IR2_PIN) ? 1 : 0;
+    int ir3 = irDetected(IR3_PIN) ? 1 : 0;
+    int ir4 = irDetected(IR4_PIN) ? 1 : 0;
 
     String alertStr = "NORMAL";
     if (activeAlert == COLLISION) alertStr = "COLLISION";
@@ -1505,10 +1614,13 @@ void loop() {
     teleJson += "\"speed\":" + String(measuredVehicleSpeed, 1) + ",";
     teleJson += "\"rec_speed\":" + String((int)permittedSpeed) + ",";
     teleJson += "\"ir\":[" + String(ir1) + "," + String(ir2) + "," + String(ir3) + "," + String(ir4) + "],";
+    teleJson += "\"irfix\":1,";
     teleJson += "\"temp\":" + String(isnan(temperature) ? 26.5 : temperature, 1) + ",";
     teleJson += "\"hum\":" + String(isnan(humidity) ? 55.0 : humidity, 0) + ",";
     teleJson += "\"moist\":" + String(moisture) + ",";
-    teleJson += "\"sound\":" + String(collision ? 1 : 0) + ",";
+    teleJson += "\"sound\":" + String(soundConfirmed ? 1 : 0) + ",";
+    teleJson += "\"snd\":" + String(soundLevelPct) + ",";
+    teleJson += "\"sndfix\":1,";
     teleJson += "\"rfid\":" + String((activeAlert == EMERGENCY || rfidEmergencyActive) ? 1 : 0) + ",";
     teleJson += "\"night\":" + String(nightMode ? 1 : 0) + ",";
     teleJson += "\"esp8266\":" + String(esp8266Online ? 1 : 0) + ",";

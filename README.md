@@ -15,11 +15,11 @@ The physical prototype uses dual microcontrollers (**ESP32** and **ESP8266**) dr
 - **Real-Time BLE & Serial Gateway**
 - **Live Command Center Web UI** (12 operational views)
 - **Multi-Modal Data Fusion** (Sensors + Camera Vision)
-- **Computer Vision Vehicle Tracking & Pothole Detection**
+- **Computer Vision Vehicle Tracking, Speed Snapshots & Emergency Vehicle Recognition**
 - **Road Risk (0–100) & Road Health (0–100) Scoring Engines**
 - **Dynamic Speed Recommendations** (Advisory, not legal limits)
 - **Google Maps-Style Navigation with Route Health Segmentation**
-- **Automated 9-Step Expo Demo Mode** (100% offline runnable)
+- **Automated 8-Step Expo Demo Mode** (100% offline runnable)
 
 ---
 
@@ -53,7 +53,7 @@ The physical prototype uses dual microcontrollers (**ESP32** and **ESP8266**) dr
                  │ - 12 Interactive Dashboard Views│
                  │ - Live Speed & Risk Streams    │
                  │ - Real-Time MJPEG Vision Feed  │
-                 │ - Automated 9-Step Expo Demo   │
+                 │ - Automated 8-Step Expo Demo   │
                  └────────────────────────────────┘
 ```
 
@@ -102,7 +102,6 @@ SentraX/
 │   │   ├── cv/
 │   │   │   ├── detector.py                           # Road object detector
 │   │   │   ├── tracker.py                            # Multi-object centroid tracking
-│   │   │   ├── pothole_detector.py                   # Asphalt crater vision detector
 │   │   │   └── cv_pipeline.py                        # Frame processor & MJPEG streamer
 │   │   ├── maps/
 │   │   │   └── route_service.py                      # Google Maps & mock route provider
@@ -113,7 +112,7 @@ SentraX/
 │   │   │   ├── routes.py
 │   │   │   └── recommendations.py
 │   │   └── simulation/
-│   │       └── simulator.py                          # 9-step expo demo & scenario engine
+│   │       └── simulator.py                          # 8-step expo demo & scenario engine
 │   │
 │   └── frontend/
 │       ├── static/
@@ -206,12 +205,12 @@ All **30 tests** covering acceptance criteria, physics, speed rules, risk calcul
 3. **Event History**: Searchable, filterable persistent incident log.
 4. **Road Risk Analysis**: Live 0-100 risk score breakdown with factor explanations.
 5. **Analytics & Trends**: Aggregate metrics, average speed, incident distribution charts.
-6. **Computer Vision**: Live 640x360 camera feed with bounding box annotations, vehicle tracking, and pothole highlights.
+6. **Computer Vision**: Live 640x360 camera feed with bounding box annotations, vehicle tracking, per-vehicle snapshots with speed, and visual emergency vehicle recognition.
 7. **Road Health Monitor**: 0-100 road health gauge with prototype bands (GOOD, MODERATE, POOR, CRITICAL).
 8. **Map / Navigation**: Interactive map with color-coded corridor road health segments (Green, Yellow, Orange, Red) and active hazard markers.
 9. **Hazard Zones**: Active perimeter geofences with distance countdowns.
 10. **Device Nodes**: Status cards for ESP32 and ESP8266 (RSSI, uptime, connection state).
-11. **Demo Simulation**: One-click 9-step automated expo demo and instant scenario injection pills.
+11. **Demo Simulation**: One-click 8-step automated expo demo and instant scenario injection pills.
 12. **Settings**: Configuration thresholds and calibration parameters.
 
 ---

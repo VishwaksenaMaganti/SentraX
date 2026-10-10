@@ -1,0 +1,95 @@
+{
+  "system": "SentraX Multi-Modal Road Intelligence",
+  "version": "1.0.0",
+  "description": "Target detection classes for SentraX roadside camera and phone-as-webcam computer vision pipeline",
+  "classes": [
+    {
+      "id": 0,
+      "name": "car",
+      "priority": "PRIMARY",
+      "category": "VEHICLE",
+      "description": "Passenger cars, sedans, SUVs, RC/toy vehicle demo targets",
+      "status": "SUPPORTED_PRETRAINED"
+    },
+    {
+      "id": 1,
+      "name": "motorcycle",
+      "priority": "PRIMARY",
+      "category": "VEHICLE",
+      "description": "Two-wheelers, scooters, motorbikes",
+      "status": "SUPPORTED_PRETRAINED"
+    },
+    {
+      "id": 2,
+      "name": "bus",
+      "priority": "PRIMARY",
+      "category": "VEHICLE",
+      "description": "Public transit and private buses",
+      "status": "SUPPORTED_PRETRAINED"
+    },
+    {
+      "id": 3,
+      "name": "truck",
+      "priority": "PRIMARY",
+      "category": "VEHICLE",
+      "description": "Commercial trucks, heavy transport lorries",
+      "status": "SUPPORTED_PRETRAINED"
+    },
+    {
+      "id": 4,
+      "name": "bicycle",
+      "priority": "PRIMARY",
+      "category": "VEHICLE",
+      "description": "Non-motorized bicycles and cyclists",
+      "status": "SUPPORTED_PRETRAINED"
+    },
+    {
+      "id": 5,
+      "name": "auto_rickshaw",
+      "priority": "PRIMARY",
+      "category": "VEHICLE",
+      "description": "Three-wheeled commercial passenger autorickshaws / tuk-tuks",
+      "status": "REQUIRES_CUSTOM_TRAINING"
+    },
+    {
+      "id": 6,
+      "name": "pedestrian",
+      "priority": "PRIMARY",
+      "category": "VULNERABLE_ROAD_USER",
+      "description": "Pedestrians walking along or crossing roadway",
+      "status": "SUPPORTED_PRETRAINED"
+    },
+    {
+      "id": 7,
+      "name": "animal",
+      "priority": "SECONDARY",
+      "category": "VULNERABLE_ROAD_USER",
+      "description": "Stray animals, cattle, dogs causing road hazards",
+      "status": "SUPPORTED_PRETRAINED"
+    },
+    {
+      "id": 8,
+      "name": "emergency_vehicle",
+      "priority": "PRIMARY",
+      "category": "PRIORITY_FLEET",
+      "description": "Ambulances, fire trucks, police cruisers (triggers RFID cross-validation)",
+      "status": "REQUIRES_CUSTOM_TRAINING"
+    },
+    {
+      "id": 9,
+      "name": "crashed_vehicle",
+      "priority": "PRIMARY",
+      "category": "COLLISION_HAZARD",
+      "description": "Overturned or structurally deformed crashed vehicles",
+      "status": "REQUIRES_CUSTOM_TRAINING"
+    },
+    {
+      "id": 10,
+      "name": "road_obstruction",
+      "priority": "SECONDARY",
+      "category": "ROAD_HAZARD",
+      "description": "Debris, fallen cargo, barricades blocking lane",
+      "status": "REQUIRES_CUSTOM_TRAINING"
+    }
+  ]
+}

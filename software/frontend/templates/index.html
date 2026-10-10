@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SentraX Command Center</title>
     <meta name="description" content="SentraX intelligent road safety and smart infrastructure command center.">
-    <meta name="theme-color" content="#070A14">
+    <meta name="theme-color" content="#11100E">
     <meta name="color-scheme" content="dark">
     <link rel="icon" type="image/svg+xml" href="/static/images/sentrax-mark.svg">
 
@@ -20,6 +20,8 @@
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
 
     <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/mascot.css">
+    <link rel="stylesheet" href="/static/css/layout.css">
 
     <!-- Leaflet (Map & Navigation fallback map) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -59,6 +61,9 @@
             <a href="#" class="nav-item" data-tab="intelligence">
                 <i class="ph ph-chart-line-up" aria-hidden="true"></i><span class="nav-label">Road Intelligence</span>
             </a>
+            <a href="#" class="nav-item" data-tab="cv">
+                <i class="ph ph-video-camera" aria-hidden="true"></i><span class="nav-label">Computer Vision</span>
+            </a>
             <a href="#" class="nav-item" data-tab="navigation">
                 <i class="ph ph-map-trifold" aria-hidden="true"></i><span class="nav-label">Map &amp; Navigation</span>
             </a>
@@ -85,6 +90,12 @@
                 <div class="page-sub" id="current-page-sub">Live corridor overview</div>
             </div>
             <div class="header-right">
+                <span class="demo-chip" id="demo-chip" hidden>Demo</span>
+                <div class="mode-switch" role="group" aria-label="Detection mode">
+                    <button class="mode-btn active" id="btn-mode-fusion" data-mode="FUSION" type="button">Fusion</button>
+                    <button class="mode-btn" id="btn-mode-sensor" data-mode="SENSOR" type="button">Sensor</button>
+                    <button class="mode-btn" id="btn-mode-camera" data-mode="CAMERA" type="button">Camera</button>
+                </div>
                 <button class="btn-hw-pill disconnected" id="btn-menu-esp32" title="Open the ESP32 pairing menu">
                     <span class="status-indicator-dot red" id="dot-esp32"></span>
                     <span id="label-esp32">ESP32: Disconnected</span>
@@ -128,7 +139,7 @@
                     </div>
                 </section>
 
-                <div class="grid-12">
+                <div class="grid-12 cc-bento">
                     <section class="card span-7 risk-card reveal">
                         <div class="risk-instrument">
                             <div class="risk-circle" id="risk-meter-circle">
@@ -164,7 +175,7 @@
                         </div>
                     </section>
 
-                    <section class="card span-5 conditions-card reveal">
+                    <section class="card span-5 conditions-card cc-cond reveal">
                         <div class="card-head">
                             <h2 class="card-title">Corridor conditions</h2>
                             <span class="card-meta">IR grid, moisture and DHT11</span>
@@ -179,7 +190,7 @@
                         </div>
                     </section>
 
-                    <section class="card span-8 reveal">
+                    <section class="card span-8 cc-chart reveal">
                         <div class="card-head">
                             <h2 class="card-title">Live speed telemetry</h2>
                             <div class="chart-legend">
@@ -192,7 +203,7 @@
                         </div>
                     </section>
 
-                    <section class="card span-4 card-stream reveal">
+                    <section class="card span-4 card-stream cc-stream reveal">
                         <div class="card-head">
                             <h2 class="card-title">Live incident stream</h2>
                             <span class="card-meta">Newest first</span>
@@ -206,7 +217,7 @@
             <!-- 2. LIVE TELEMETRY                                      -->
             <!-- ====================================================== -->
             <div class="page-container" id="page-live-telemetry" data-title="Live Telemetry" data-sub="Every physical sensor on the ESP32, in real time">
-                <div class="grid-12">
+                <div class="grid-12 tel-bento">
                     <section class="card span-3 sensor-tile reveal">
                         <div class="sensor-icon"><i class="ph ph-thermometer-simple" aria-hidden="true"></i></div>
                         <div class="sensor-label">Ambient temperature</div>
@@ -236,7 +247,7 @@
                         <div class="sensor-src">Sound sensor <span class="mono">GPIO 32, active high</span></div>
                     </section>
 
-                    <section class="card span-8">
+                    <section class="card span-8 tel-ir">
                         <div class="card-head">
                             <h2 class="card-title">IR traffic grid</h2>
                             <span class="card-meta">ESP32 presence sensors</span>
@@ -270,7 +281,7 @@
                         </ul>
                     </section>
 
-                    <section class="card span-4">
+                    <section class="card span-4 tel-us">
                         <div class="card-head">
                             <h2 class="card-title">Ultrasonic speed gate</h2>
                             <span class="card-meta">0.30 m baseline</span>
@@ -292,7 +303,7 @@
                         <p class="card-note">Speed is the time a vehicle takes to cross from US1 to US2.</p>
                     </section>
 
-                    <section class="card span-12 trigger-strip">
+                    <section class="card span-12 trigger-strip tel-trig">
                         <div class="trigger-cell">
                             <div class="sensor-icon"><i class="ph ph-siren" aria-hidden="true"></i></div>
                             <div>
@@ -695,11 +706,10 @@
             <!-- 4. ROAD INTELLIGENCE (risk, analytics, vision, health, -->
             <!--    hardware nodes)                                     -->
             <!-- ====================================================== -->
-            <div class="page-container" id="page-intelligence" data-title="Road Intelligence" data-sub="Risk, analytics, vision, road health and hardware nodes">
+            <div class="page-container" id="page-intelligence" data-title="Road Intelligence" data-sub="Risk, analytics, road health and hardware nodes">
                 <nav class="subnav" id="intel-subnav" aria-label="Road Intelligence sections">
                     <a href="#intel-risk" class="subnav-link active"><i class="ph ph-warning" aria-hidden="true"></i>Risk</a>
                     <a href="#intel-analytics" class="subnav-link"><i class="ph ph-chart-line-up" aria-hidden="true"></i>Analytics</a>
-                    <a href="#intel-vision" class="subnav-link"><i class="ph ph-video-camera" aria-hidden="true"></i>Vision</a>
                     <a href="#intel-health" class="subnav-link"><i class="ph ph-road-horizon" aria-hidden="true"></i>Road health</a>
                     <a href="#intel-hardware" class="subnav-link"><i class="ph ph-cpu" aria-hidden="true"></i>Hardware nodes</a>
                 </nav>
@@ -730,7 +740,6 @@
                                 <li><span>Wrong-way vehicle entry</span><b class="w-crit">+40</b></li>
                                 <li><span>Stalled vehicle on corridor</span><b class="w-warn">+25</b></li>
                                 <li><span>Overspeed (&gt; 4.0 km/h demo)</span><b class="w-warn">+20</b></li>
-                                <li><span>Potholes ahead, each (max 30)</span><b class="w-warn">+15</b></li>
                                 <li><span>Wet surface (&lt; 2000 moisture)</span><b class="w-info">+15</b></li>
                                 <li><span>Congestion (5 s or more)</span><b class="w-info">+10</b></li>
                                 <li><span>High temperature or humidity</span><b class="w-info">+5</b></li>
@@ -773,40 +782,6 @@
                     </div>
                 </section>
 
-                <!-- Computer Vision -->
-                <section class="intel-section" id="intel-vision">
-                    <header class="section-head">
-                        <h2>Computer vision</h2>
-                        <p>Phone camera perception: tracked objects and surface defects.</p>
-                    </header>
-                    <div class="grid-12">
-                        <div class="card span-8 cv-card">
-                            <div class="cv-monitor-box">
-                                <img id="cv-feed" data-src="/api/cv/feed" alt="SentraX computer vision camera feed">
-                                <div class="cv-hud-overlay"><span class="rec-dot"></span>Detector active</div>
-                                <div class="cv-hud-res mono">640x360 MJPEG</div>
-                            </div>
-                        </div>
-                        <div class="card span-4">
-                            <div class="card-head">
-                                <h3 class="card-title">Tracked objects</h3>
-                                <span class="card-meta">Live</span>
-                            </div>
-                            <div class="cv-stats">
-                                <div><span class="cv-stat-value" id="cv-vehicles">0</span><span class="cv-stat-label">Vehicles</span></div>
-                                <div><span class="cv-stat-value" id="cv-potholes">0</span><span class="cv-stat-label">Potholes</span></div>
-                                <div><span class="cv-stat-value" id="cv-stopped">0</span><span class="cv-stat-label">Stopped</span></div>
-                                <div><span class="cv-stat-value" id="cv-wrongway">0</span><span class="cv-stat-label">Wrong-way</span></div>
-                            </div>
-                            <dl class="kv-list compact">
-                                <div class="kv-row"><dt>Perception model</dt><dd>Multi-class motion and contour</dd></div>
-                                <div class="kv-row"><dt>Speed estimation</dt><dd class="text-warn">Estimated (uncalibrated)</dd></div>
-                                <div class="kv-row"><dt>Target classes</dt><dd>Car, bike, truck, bus, pedestrian, pothole</dd></div>
-                            </dl>
-                        </div>
-                    </div>
-                </section>
-
                 <!-- Road Health -->
                 <section class="intel-section" id="intel-health">
                     <header class="section-head">
@@ -829,7 +804,7 @@
                             <ul class="band-list">
                                 <li class="band good"><b>85-100</b><span>Good</span><em>Pristine asphalt, clear markings</em></li>
                                 <li class="band moderate"><b>65-84</b><span>Moderate</span><em>Minor wear, light traffic wear</em></li>
-                                <li class="band poor"><b>40-64</b><span>Poor</span><em>Pothole clusters, wet sections</em></li>
+                                <li class="band poor"><b>40-64</b><span>Poor</span><em>Recurring incidents, wet sections</em></li>
                                 <li class="band critical"><b>0-39</b><span>Critical</span><em>Severe damage, frequent crashes</em></li>
                             </ul>
                         </div>
@@ -847,7 +822,167 @@
             </div>
 
             <!-- ====================================================== -->
-            <!-- 5. MAP / NAVIGATION (IN-CAR SCREEN REPLICA)                      -->
+            <!-- 5. COMPUTER VISION                                     -->
+            <!-- ====================================================== -->
+            <div class="page-container" id="page-cv" data-title="Computer Vision" data-sub="Camera perception and sensor fusion">
+                <div class="grid-12">
+                    <section class="card span-8 cv-live">
+                        <div class="cv-monitor-box">
+                            <img id="cv-feed-img" data-src="/api/cv/feed" alt="Live camera feed">
+                            <button class="icon-btn cv-reload" id="btn-cv-reload-stream" type="button" title="Reload feed" aria-label="Reload feed"><i class="ph ph-arrows-clockwise"></i></button>
+                        </div>
+                        <dl class="cv-strip">
+                            <div class="cv-strip-source"><dt id="cv-stat-source-name">Source</dt><dd><span class="chip chip-muted" id="cv-stat-connected">OFFLINE</span></dd></div>
+                            <div><dt>FPS</dt><dd id="cv-stat-fps">0.0</dd></div>
+                            <div><dt>Latency</dt><dd><span id="cv-stat-latency">0</span> ms</dd></div>
+                            <div><dt>Resolution</dt><dd id="cv-stat-resolution">640x360</dd></div>
+                            <div><dt>Detector</dt><dd id="cv-stat-detection">ACTIVE</dd></div>
+                        </dl>
+                    </section>
+
+                    <section class="card span-4 cv-tracks">
+                        <div class="card-head">
+                            <h2 class="card-title">Tracked vehicles</h2>
+                            <span class="card-meta" id="cv-stat-tracking">0 OBJECTS</span>
+                        </div>
+                        <div class="track-list" id="tbody-cv-tracks">
+                            <div class="empty-inline">No vehicles in view.</div>
+                        </div>
+                    </section>
+
+                    <section class="card span-7">
+                        <div class="card-head">
+                            <h2 class="card-title">Sensor and camera agreement</h2>
+                            <button class="btn btn-ghost btn-sm" id="btn-inspect-latest-decision" type="button">
+                                <i class="ph ph-magnifying-glass" aria-hidden="true"></i>Explain decision
+                            </button>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="data-table fusion-table">
+                                <thead>
+                                    <tr><th>Event</th><th>Sensor</th><th>Camera</th><th>Result</th><th>Conf.</th></tr>
+                                </thead>
+                                <tbody id="tbody-fusion-matrix">
+                                    <tr class="empty-row"><td colspan="5">Waiting for fusion data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="card span-5">
+                        <div class="card-head">
+                            <h2 class="card-title">Scenario tester</h2>
+                            <button class="btn btn-ghost btn-sm" id="btn-toggle-scenario-drawer" type="button">All 14 cases</button>
+                        </div>
+                        <label class="field-label" for="select-scenario-picker">Test case</label>
+                        <div class="field-row">
+                            <select id="select-scenario-picker" class="ctrl-select">
+                                <option value="1">T1  Vehicle confirmed</option>
+                                <option value="2">T2  Camera stalled (5 s)</option>
+                                <option value="3">T3  Stalled confirmed</option>
+                                <option value="4">T4  Vehicle moves (reset)</option>
+                                <option value="5">T5  Camera wrong-way</option>
+                                <option value="6">T6  Wrong-way confirmed</option>
+                                <option value="7">T7  Possible collision</option>
+                                <option value="8">T8  Collision confirmed</option>
+                                <option value="9">T9  Sensor-only collision</option>
+                                <option value="10">T10  Camera-only collision</option>
+                                <option value="11">T11  Sensor / camera mismatch</option>
+                                <option value="12">T12  Sensor-only wet road</option>
+                                <option value="14">T14  Vehicle toppled over</option>
+                            </select>
+                            <button class="btn btn-primary" id="btn-run-selected-scenario" type="button">Run</button>
+                        </div>
+                        <div class="scenario-chips">
+                            <button class="chip-btn btn-test-case" type="button" data-test="8">Collision</button>
+                            <button class="chip-btn btn-test-case" type="button" data-test="3">Stalled</button>
+                            <button class="chip-btn btn-test-case" type="button" data-test="14">Toppled</button>
+                            <button class="chip-btn btn-test-case" type="button" data-test="6">Wrong way</button>
+                            <button class="chip-btn btn-test-case" type="button" data-test="12">Wet road</button>
+                            <button class="chip-btn btn-test-case" type="button" data-test="4">Reset</button>
+                        </div>
+                        <div class="scenario-drawer" id="scenario-full-drawer">
+                            <button class="scenario-case btn-test-case" type="button" data-test="1"><b>T1</b>Vehicle confirmed</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="2"><b>T2</b>Camera stalled (5 s)</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="3"><b>T3</b>Stalled confirmed</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="4"><b>T4</b>Vehicle moves (reset)</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="5"><b>T5</b>Camera wrong-way</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="6"><b>T6</b>Wrong-way confirmed</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="7"><b>T7</b>Possible collision</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="8"><b>T8</b>Collision confirmed</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="9"><b>T9</b>Sensor-only collision</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="10"><b>T10</b>Camera-only collision</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="11"><b>T11</b>Sensor / camera mismatch</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="12"><b>T12</b>Sensor-only wet road</button>
+                            <button class="scenario-case btn-test-case" type="button" data-test="14"><b>T14</b>Vehicle toppled over</button>
+                        </div>
+                    </section>
+
+                    <details class="card span-12 cv-settings">
+                        <summary>
+                            <span class="card-title">Camera settings</span>
+                            <span class="card-meta">Source, speed calibration and stall timer</span>
+                            <i class="ph ph-caret-down" aria-hidden="true"></i>
+                        </summary>
+                        <div class="cv-settings-grid">
+                            <div class="cv-settings-col">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cv-select-device">Camera</label>
+                                    <button class="link-btn" id="btn-cv-refresh-devices" type="button">Rescan</button>
+                                </div>
+                                <select id="cv-select-device" class="ctrl-select">
+                                    <option value="4">Iriun webcam (device 4)</option>
+                                    <option value="0">Camera 0 (default webcam)</option>
+                                </select>
+                                <label class="field-label" for="cv-input-custom-source">Or stream URL / device index</label>
+                                <input type="text" class="text-input" id="cv-input-custom-source" placeholder="4, iriun, http://192.168.1.50:8080/video or synthetic">
+                                <div class="scenario-chips">
+                                    <button class="chip-btn cv-btn-preset" type="button" data-source="4">Iriun</button>
+                                    <button class="chip-btn cv-btn-preset" type="button" data-source="0">Webcam</button>
+                                    <button class="chip-btn cv-btn-preset" type="button" data-source="http://192.168.1.100:8080/video">Phone IP</button>
+                                    <button class="chip-btn cv-btn-preset" type="button" data-source="synthetic">Synthetic</button>
+                                </div>
+                                <button class="btn btn-secondary btn-block" id="btn-cv-apply-source" type="button">Apply source</button>
+                                <div class="field-msg" id="cv-source-msg"></div>
+                            </div>
+
+                            <div class="cv-settings-col">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cv-range-line-a">Start line A</label>
+                                    <span class="field-value" id="cv-lbl-line-a">140 px</span>
+                                </div>
+                                <input type="range" class="ctrl-slider" id="cv-range-line-a" min="20" max="320" value="140">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cv-range-line-b">Finish line B</label>
+                                    <span class="field-value" id="cv-lbl-line-b">260 px</span>
+                                </div>
+                                <input type="range" class="ctrl-slider" id="cv-range-line-b" min="40" max="355" value="260">
+                                <label class="field-label" for="cv-num-distance">Distance between lines (m)</label>
+                                <input type="number" class="text-input" id="cv-num-distance" step="0.05" min="0.05" max="100.0" value="0.30">
+                                <div class="scenario-chips">
+                                    <button class="chip-btn cv-btn-dist-preset" type="button" data-dist="0.30">Toy car 0.30</button>
+                                    <button class="chip-btn cv-btn-dist-preset" type="button" data-dist="0.50">Desk 0.50</button>
+                                    <button class="chip-btn cv-btn-dist-preset" type="button" data-dist="20.0">Highway 20</button>
+                                </div>
+                                <button class="btn btn-secondary btn-block" id="btn-cv-save-cal" type="button">Save calibration</button>
+                                <div class="field-msg" id="cv-cal-msg"></div>
+                            </div>
+
+                            <div class="cv-settings-col">
+                                <span class="field-label">Stalled vehicle timer</span>
+                                <div class="segmented">
+                                    <button class="seg active" id="btn-cv-stall-5s" type="button">5 s demo</button>
+                                    <button class="seg" id="btn-cv-stall-15s" type="button">15 s production</button>
+                                </div>
+                                <p class="card-note">Speed is estimated from the time a vehicle takes to cross line A then line B.</p>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+
+            <!-- ====================================================== -->
+            <!-- 6. MAP / NAVIGATION (IN-CAR SCREEN REPLICA)                      -->
             <!-- ====================================================== -->
             <div class="page-container" id="page-navigation" data-title="Google Maps In-Car Navigation">
                 <div class="nav-screen-layout" id="nav-layout-wrapper">
@@ -982,19 +1117,14 @@
 
                     <!-- Side Route Setup & Google Maps Configuration Panel -->
                     <div class="nav-console-panel">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
-                            <div>
-                                <h3 style="font-size:16px; font-weight:700; color:var(--text-primary); margin:0;">Route Corridor & Map Configuration</h3>
-                                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Select start and destination points along the smart sensor road.</div>
-                            </div>
-                            <button class="btn btn-outline btn-sm" id="btn-toggle-expanded-view" style="font-size:11px;">
-                                Toggle Cockpit View
-                            </button>
+                        <div class="card-head">
+                            <h2 class="card-title">Route</h2>
+                            <button class="btn btn-ghost btn-sm" id="btn-toggle-expanded-view" type="button">Cockpit view</button>
                         </div>
 
                         <!-- Location 1: Origin -->
                         <div class="nav-field-group">
-                            <label class="nav-field-label">ORIGIN (START POINT)</label>
+                            <label class="nav-field-label" for="nav-input-origin">From</label>
                             <div class="nav-input-wrap">
                                 <svg class="nav-input-icon" fill="none" stroke="#10b981" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="2.5" fill="#10b981"/></svg>
                                 <input type="text" class="nav-input" id="nav-input-origin" value="Woxsen North Roundabout" placeholder="e.g. Woxsen North Roundabout">
@@ -1002,16 +1132,14 @@
                         </div>
 
                         <!-- Swap & Presets Row -->
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin:-8px 0 12px 0;">
-                            <button class="btn btn-outline btn-sm" id="btn-swap-locations" style="padding:4px 10px; font-size:11px;">
-                                ⇅ Swap Start & Destination
-                            </button>
-                            <span style="font-size:11px; color:var(--accent-cyan);" id="nav-route-dist-eta">1.8 km | 4.5 mins</span>
+                        <div class="route-meta-row">
+                            <button class="link-btn" id="btn-swap-locations" type="button"><i class="ph ph-arrows-down-up" aria-hidden="true"></i>Swap</button>
+                            <span class="route-eta" id="nav-route-dist-eta">1.8 km | 4.5 mins</span>
                         </div>
 
                         <!-- Location 2: Destination -->
                         <div class="nav-field-group">
-                            <label class="nav-field-label">DESTINATION (END POINT)</label>
+                            <label class="nav-field-label" for="nav-input-dest">To</label>
                             <div class="nav-input-wrap">
                                 <svg class="nav-input-icon" fill="none" stroke="#ef4444" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
                                 <input type="text" class="nav-input" id="nav-input-dest" value="Woxsen Hostels & Blue Embers" placeholder="e.g. Woxsen Hostels & Blue Embers">
@@ -1020,55 +1148,24 @@
 
                         <!-- Presets -->
                         <div class="nav-field-group">
-                            <label class="nav-field-label">QUICK ROUTE PRESETS</label>
+                            <label class="nav-field-label">Presets</label>
                             <div class="nav-preset-pills">
-                                <span class="nav-preset-pill active" data-preset="woxsen-campus">Woxsen Campus Loop (Image Exact)</span>
-                                <span class="nav-preset-pill" data-preset="woxsen-gate">Main Gate → Academic Block</span>
-                                <span class="nav-preset-pill" data-preset="corridor-test">Sensor Track (US1 → IR4)</span>
+                                <span class="nav-preset-pill active" data-preset="woxsen-campus">Campus loop</span>
+                                <span class="nav-preset-pill" data-preset="woxsen-gate">Main gate to academic block</span>
+                                <span class="nav-preset-pill" data-preset="corridor-test">Sensor track</span>
                             </div>
                         </div>
 
                         <!-- Update Route Button -->
-                        <button class="btn btn-primary" id="btn-recompute-route" style="width:100%; margin-bottom:18px;">
-                            Update Route & Recalculate Sensor Metrics
-                        </button>
+                        <button class="btn btn-primary btn-block" id="btn-recompute-route" type="button">Update route</button>
 
-                        <!-- Google Maps Platform Status & API Key Integration -->
-                        <div style="background:var(--bg-dark); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:14px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                <span style="font-size:12px; font-weight:700; color:var(--text-primary);">Google Maps Platform Integration</span>
-                                <span class="badge" id="nav-gmaps-badge" style="background:rgba(56,189,248,0.15); color:var(--accent-cyan); border:1px solid rgba(56,189,248,0.3);">Maps JS & Routes API</span>
-                            </div>
-                            <div style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:10px;">
-                                Connects directly to the Google Maps JavaScript API and Routes API for photorealistic map tiles, satellite hybrid layers, and traffic services. Use your Google Cloud API key or a free Maps Demo Key for prototyping.
-                            </div>
-                            <div style="display:flex; gap:8px;">
-                                <input type="password" class="nav-input" id="nav-gmaps-key-input" placeholder="Paste Google Maps API Key here..." style="font-size:12px; padding-left:12px;">
-                                <button class="btn btn-outline btn-sm" id="btn-save-gmaps-key" style="white-space:nowrap;">
-                                    Save Key
-                                </button>
-                            </div>
-                            <div style="margin-top:6px; font-size:10px; color:#71717a;" id="nav-gmaps-key-status">
-                                Interactive navigation mode active with dark vector styling.
-                            </div>
-                        </div>
-
-                        <!-- Live Hardware Sensor Link Information -->
-                        <div style="margin-top:14px; padding:12px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:var(--radius-md); font-size:11px; line-height:1.6;">
-                            <div style="font-weight:700; color:var(--accent-emerald); margin-bottom:4px;">
-                                Physical Hardware Sensor Feedback Active
-                            </div>
-                            <div style="color:var(--text-muted);" id="nav-sensor-explanation">
-                                The Road Health score (68% Fair), Road Anatomy, and Speed Limits dynamically adapt in real time to the live ESP32 sensors (moisture, IR grid, ultrasonic speed, sound/collision).
-                            </div>
-                        </div>
                     </div>
 
                 </div>
             </div>
 
             <!-- ====================================================== -->
-            <!-- 6. EVENT HISTORY                                       -->
+            <!-- 7. EVENT HISTORY                                       -->
             <!-- ====================================================== -->
             <div class="page-container" id="page-events" data-title="Event History" data-sub="Persistent incident log">
                 <section class="card">
@@ -1101,10 +1198,22 @@
             </div>
 
             <!-- ====================================================== -->
-            <!-- 7. SETTINGS                                            -->
+            <!-- 8. SETTINGS                                            -->
             <!-- ====================================================== -->
             <div class="page-container" id="page-settings" data-title="Settings" data-sub="Prototype hardware and scoring parameters">
                 <div class="settings-grid">
+                    <section class="card">
+                        <div class="card-head">
+                            <h2 class="card-title">Google Maps</h2>
+                            <span class="chip chip-muted" id="nav-gmaps-badge">Fallback map</span>
+                        </div>
+                        <label class="field-label" for="nav-gmaps-key-input">API key</label>
+                        <div class="field-row">
+                            <input type="password" class="text-input" id="nav-gmaps-key-input" placeholder="Google Maps JavaScript API key">
+                            <button class="btn btn-secondary" id="btn-save-gmaps-key" type="button">Save</button>
+                        </div>
+                        <p class="card-note" id="nav-gmaps-key-status">Without a key, the map uses the built-in dark fallback.</p>
+                    </section>
                     <section class="card">
                         <div class="card-head"><h2 class="card-title">Detection timing</h2></div>
                         <dl class="kv-list">
@@ -1132,7 +1241,6 @@
         <section class="hardware-standby-overlay" id="hardware-standby-overlay" aria-labelledby="gate-title">
             <div class="gate-bg" aria-hidden="true">
                 <img src="/static/images/project_aerial.jpg" alt="">
-                <canvas id="gate-trails"></canvas>
             </div>
             <div class="gate">
                 <div class="gate-copy">
@@ -1148,6 +1256,9 @@
                     <div class="gate-actions">
                         <button class="btn btn-primary btn-lg" id="btn-open-esp32-modal" type="button">
                             <i class="ph-bold ph-bluetooth" aria-hidden="true"></i>Pair controller
+                        </button>
+                        <button class="btn btn-ghost btn-lg" id="btn-bypass-standby" type="button">
+                            <i class="ph ph-video-camera" aria-hidden="true"></i>Continue with camera
                         </button>
                     </div>
                 </div>
@@ -1171,6 +1282,62 @@
             </div>
         </section>
     </main>
+
+    <!-- ============================================================ -->
+    <!-- CO-PILOT DOCK: Sentri the mascot                             -->
+    <!-- ============================================================ -->
+    <aside class="copilot-dock" id="copilot-dock" aria-label="Sentri driver co-pilot">
+        <div class="dock-head">
+            <div>
+                <div class="dock-kicker">Driver co-pilot</div>
+                <div class="dock-name">Sentri</div>
+            </div>
+            <button class="dock-mute" id="sentri-mute" type="button" aria-pressed="false" title="Mute Sentri's chirps">
+                <i class="ph ph-speaker-high" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="dock-stage" id="sentri-root"></div>
+        <div class="dock-log">
+            <div class="dock-log-head">Recent reactions</div>
+            <ol class="dock-log-list" id="sentri-log">
+                <li class="dock-log-empty">Sentri will log each heads-up here.</li>
+            </ol>
+        </div>
+    </aside>
+
+    <!-- ============================================================ -->
+    <!-- MODAL: FUSION DECISION AUDIT                                 -->
+    <!-- ============================================================ -->
+    <div class="modal-backdrop" id="modal-explain-audit">
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="audit-event-title">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title" id="audit-event-title">Decision audit</div>
+                    <div class="card-sub"><span id="audit-event-time">--</span> <span id="audit-event-id"></span></div>
+                </div>
+                <div class="modal-header-right">
+                    <span class="chip chip-muted" id="audit-badge-status">--</span>
+                    <span class="chip chip-muted" id="audit-event-severity">--</span>
+                    <button class="icon-btn" id="btn-close-audit" type="button" aria-label="Close"><i class="ph ph-x"></i></button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <dl class="kv-list audit-list">
+                    <div class="kv-row"><dt>Sensor saw</dt><dd id="audit-q1">--</dd></div>
+                    <div class="kv-row"><dt>Camera saw</dt><dd id="audit-q2">--</dd></div>
+                    <div class="kv-row"><dt>Agreement</dt><dd id="audit-q3">--</dd></div>
+                    <div class="kv-row"><dt>Confidence</dt><dd id="audit-q4">--</dd></div>
+                    <div class="kv-row"><dt>Why confirmed</dt><dd id="audit-q5">--</dd></div>
+                    <div class="kv-row"><dt>Risk impact</dt><dd id="audit-q6">--</dd></div>
+                    <div class="kv-row"><dt>Road health impact</dt><dd id="audit-q7">--</dd></div>
+                    <div class="kv-row"><dt>Speed advice</dt><dd id="audit-q8">--</dd></div>
+                </dl>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-close-audit-footer" type="button">Close</button>
+            </div>
+        </div>
+    </div>
 
     <!-- ============================================================ -->
     <!-- MODAL: ESP32 CORE GATEWAY PAIRING                            -->
@@ -1275,6 +1442,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="/static/js/mascot.js"></script>
     <script src="/static/js/ui.js"></script>
     <script src="/static/js/app.js"></script>
     <script src="/static/js/visuals.js"></script>

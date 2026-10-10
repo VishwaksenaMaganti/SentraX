@@ -1,0 +1,308 @@
+/* ==========================================================================
+   SentraX layout v3: "Graphite + Sentri Orange"
+   --------------------------------------------------------------------------
+   Loaded after styles.css. Re-tones the palette to warm graphite with one
+   orange accent (Sentri's core), adds the full-height co-pilot dock on the
+   right, and regroups Command Center and Live Telemetry into asymmetric
+   bento grids. Every id and data hook from styles.css is untouched.
+   ========================================================================== */
+
+:root {
+    /* Surfaces: warm graphite instead of ink navy */
+    --bg: #11100E;
+    --bg-rail: #0D0C0B;
+    --surface: #191715;
+    --raised: #221F1C;
+    --overlay: #2A2623;
+    --border: #2A2622;
+    --border-strong: #3A3530;
+
+    /* Text */
+    --text: #F3EFE9;
+    --text-2: #C7BFB6;
+    --muted: #9A9087;
+    --faint: #665D55;
+
+    /* Single accent: Sentri orange */
+    --accent: #FF8A2A;
+    --accent-text: #FFA45C;
+    --accent-soft: rgba(255, 138, 42, 0.12);
+    --accent-line: rgba(255, 138, 42, 0.42);
+
+    /* Critical stays red so it never reads as the brand accent */
+    --crit: #EF4B3A;
+    --crit-soft: rgba(239, 75, 58, 0.14);
+    --poor: #F07A3A;
+
+    --action: #F3EFE9;
+    --action-ink: #11100E;
+
+    --shadow-pop: 0 24px 64px -16px rgba(5, 4, 3, 0.8);
+
+    --dock-w: 320px;
+    --r-card: 18px;
+}
+
+body {
+    display: flex;
+}
+
+/* Header glass re-tinted to graphite */
+.top-header {
+    background: rgba(17, 16, 14, 0.78);
+}
+
+/* Main column now shares the row with the dock */
+.main-viewport {
+    flex: 1 1 auto;
+}
+
+.card {
+    border-radius: var(--r-card);
+}
+
+/* ==========================================================================
+   Co-pilot dock
+   ========================================================================== */
+.copilot-dock {
+    position: relative;
+    flex: 0 0 var(--dock-w);
+    width: var(--dock-w);
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 20px 20px;
+    border-left: 1px solid var(--border);
+    background:
+        radial-gradient(120% 60% at 50% 46%, rgba(255, 138, 42, 0.10), transparent 62%),
+        var(--bg-rail);
+    overflow: hidden;
+}
+
+/* Tone wash follows Sentri's mood */
+.copilot-dock::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(90% 50% at 50% 45%, rgba(255, 138, 42, 0.22), transparent 70%);
+    transition: opacity 600ms var(--ease-out);
+}
+.copilot-dock[data-tone="warn"]::after { opacity: 0.6; }
+.copilot-dock[data-tone="crit"]::after { opacity: 1; animation: dock-alarm 1.2s ease-in-out infinite; }
+@keyframes dock-alarm { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+.dock-head {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 28px;
+}
+.dock-kicker {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.dock-name {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+.dock-mute {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--raised);
+    color: var(--text);
+    font-size: 17px;
+    cursor: pointer;
+    transition: transform var(--dur-1) var(--ease-out), background var(--dur-2);
+}
+.dock-mute:hover { background: var(--overlay); }
+.dock-mute:active { transform: scale(0.94); }
+.dock-mute[aria-pressed="true"] { color: var(--muted); }
+
+.dock-stage {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 12px 0;
+}
+.dock-stage .sentri-stage { max-width: 250px; }
+.dock-stage .sentri-bubble { max-width: 100%; }
+
+.dock-log {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+.dock-log-head {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+.dock-log-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.dock-log-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12.5px;
+    color: var(--text-2);
+    animation: dock-log-in 420ms var(--ease-out);
+}
+.dock-log-list li .t {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--faint);
+}
+.dock-log-list li .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-2);
+    flex-shrink: 0;
+}
+.dock-log-list li[data-tone="warn"] .dot { background: var(--accent); }
+.dock-log-list li[data-tone="crit"] .dot { background: var(--crit); }
+.dock-log-list li[data-tone="good"] .dot { background: var(--good); }
+.dock-log-list .dock-log-empty { color: var(--faint); }
+@keyframes dock-log-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ==========================================================================
+   Command Center bento
+   Tall risk column on the left, chart and stream to the right.
+   ========================================================================== */
+.cc-bento {
+    grid-template-columns: minmax(300px, 0.9fr) 1fr 1fr;
+    grid-template-areas:
+        "risk  chart  chart"
+        "risk  cond   stream";
+    align-items: stretch;
+}
+.cc-bento > .card { grid-column: auto; }
+.cc-bento > .risk-card { grid-area: risk; }
+.cc-bento > .cc-chart { grid-area: chart; }
+.cc-bento > .cc-cond { grid-area: cond; }
+.cc-bento > .cc-stream { grid-area: stream; }
+
+/* Risk card stacks the dial over its factor list */
+.cc-bento > .risk-card {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+.cc-bento > .risk-card .risk-instrument { align-self: center; }
+.cc-bento > .risk-card .risk-factors { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 18px; }
+
+/* Conditions fit a narrower column: 2 x 3 */
+.cc-bento .cond-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.cc-stream .timeline-list { max-height: 320px; }
+
+/* ==========================================================================
+   Live Telemetry bento
+   2 x 2 sensor tiles beside the IR grid, gate and triggers below.
+   ========================================================================== */
+.tel-bento {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, 1.4fr) minmax(0, 1fr);
+    grid-template-areas:
+        "t1   t2   ir   ir"
+        "t3   t4   us   us"
+        "trig trig trig trig";
+}
+.tel-bento > .card { grid-column: auto; }
+.tel-bento > .sensor-tile:nth-of-type(1) { grid-area: t1; }
+.tel-bento > .sensor-tile:nth-of-type(2) { grid-area: t2; }
+.tel-bento > .sensor-tile:nth-of-type(3) { grid-area: t3; }
+.tel-bento > .sensor-tile:nth-of-type(4) { grid-area: t4; }
+.tel-bento > .tel-ir { grid-area: ir; }
+.tel-bento > .tel-us { grid-area: us; }
+.tel-bento > .tel-trig { grid-area: trig; }
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+@media (max-width: 1440px) {
+    :root { --dock-w: 290px; }
+}
+
+@media (max-width: 1280px) {
+    .cc-bento {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+            "risk  chart"
+            "risk  cond"
+            "stream stream";
+    }
+    .tel-bento {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            "t1 t2"
+            "t3 t4"
+            "ir ir"
+            "us us"
+            "trig trig";
+    }
+}
+
+/* Below 1100px the dock folds into a floating co-pilot in the corner */
+@media (max-width: 1100px) {
+    .copilot-dock {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: var(--z-gate);
+        width: 220px;
+        height: auto;
+        flex: none;
+        padding: 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: 22px;
+        box-shadow: var(--shadow-pop);
+    }
+    .dock-log { display: none; }
+    .dock-stage { padding: 4px 0 0; }
+    .dock-stage .sentri { gap: 8px; }
+    .dock-stage .sentri-stage { max-width: 120px; }
+    .dock-stage .sentri-bubble { padding: 10px 12px; }
+    .dock-stage .sentri-bubble-title { font-size: 14px; }
+    .dock-stage .sentri-bubble-line { font-size: 12px; }
+}
+
+@media (max-width: 767px) {
+    .cc-bento,
+    .tel-bento {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: none;
+    }
+    .cc-bento > .card,
+    .tel-bento > .card { grid-area: auto !important; }
+    .copilot-dock { width: 168px; right: 12px; bottom: 12px; }
+    .dock-head { display: none; }
+    .dock-stage .sentri-stage { max-width: 92px; }
+}

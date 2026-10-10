@@ -9,3 +9,6 @@ bleak>=0.21.0
 numpy>=1.26.0
 requests>=2.31.0
 pytest>=8.0.0
+# YOLO + ByteTrack vehicle detection. Install the CUDA build of PyTorch first for GPU speed:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+ultralytics>=8.3.0

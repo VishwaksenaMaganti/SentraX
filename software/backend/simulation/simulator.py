@@ -24,7 +24,7 @@ class SentraXSimulator:
         self.is_active = True
         self.current_scenario = "NORMAL"
         self.active_step = 1
-        self.total_steps = 9
+        self.total_steps = 8
         self.auto_demo_running = False
         self._demo_task: Optional[asyncio.Task] = None
 
@@ -187,15 +187,6 @@ class SentraXSimulator:
                 is_simulated=True
             )
 
-        elif self.current_scenario == "POTHOLE":
-            t.cv_pothole_count = 2
-            event_to_save = CanonicalEvent(
-                source="SIMULATED", type=EventType.POTHOLE, severity=EventSeverity.WARNING,
-                title="POTHOLE AHEAD - SLOW DOWN",
-                description="Phone CV confirmed 2 asphalt craters in lane 1",
-                is_simulated=True
-            )
-
         elif self.current_scenario == "ANIMAL_HAZARD":
             t.hazard_count = 1
             event_to_save = CanonicalEvent(
@@ -225,7 +216,7 @@ class SentraXSimulator:
 
     async def start_one_click_demo(self):
         """
-        Runs the mandatory 9-step demonstration script:
+        Runs the mandatory 8-step demonstration script:
           STEP 1: Normal road (80 km/h)
           STEP 2: Toy car detected (4.5 km/h)
           STEP 3: Overspeed threshold exceeded (Show: OVERSPEED / RASH DRIVING)
@@ -233,8 +224,7 @@ class SentraXSimulator:
           STEP 5: Wet road -> ROAD WET -> Recommended: 40 km/h
           STEP 6: Collision -> COLLISION
           STEP 7: RFID -> EMERGENCY
-          STEP 8: Pothole -> POTHOLE AHEAD
-          STEP 9: Road-risk score increases
+          STEP 8: Road-risk score increases
         """
         if self.auto_demo_running:
             return
@@ -289,18 +279,12 @@ class SentraXSimulator:
             await self.trigger_scenario("EMERGENCY")
             await asyncio.sleep(4.0)
 
-            # STEP 8: Pothole
+            # STEP 8: Composite High Road-Risk
             self.active_step = 8
-            await self.trigger_scenario("POTHOLE")
-            await asyncio.sleep(3.0)
-
-            # STEP 9: Composite High Road-Risk
-            self.active_step = 9
             t = self.telemetry.copy(deep=True)
             t.risk_score = 88
             t.risk_reasons = [
                 "Wet road surface active (+15)",
-                "Severe pothole cluster verified (+30)",
                 "Accident hazard perimeter (+25)",
                 "High corridor congestion (+10)"
             ]

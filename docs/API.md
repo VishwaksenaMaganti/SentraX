@@ -24,7 +24,6 @@ The SentraX backend is built on **FastAPI** and provides high-performance, async
 - `GET /api/road-health`: Overall corridor road health score (0-100) and deterioration factors.
 - `GET /api/hazards`: List active geographic hazard perimeters.
 - `POST /api/hazards`: Register a new hazard zone.
-- `GET /api/potholes`: List verified pothole detections.
 
 ### Navigation & Routing
 - `GET /api/route-health`: Default corridor route segmented with color-coded safety bands.
@@ -35,14 +34,17 @@ The SentraX backend is built on **FastAPI** and provides high-performance, async
 - `GET /api/recommendations`: Active dynamic advisory speed and multimodal transit suggestions.
 
 ### Simulation Controls
-- `POST /api/simulation/start`: Launch the automated 9-step expo walkthrough.
+- `POST /api/simulation/start`: Launch the automated 8-step expo walkthrough.
 - `POST /api/simulation/stop`: Stop demo sequence and reset baseline state.
 - `POST /api/simulation/scenario`: Trigger an individual scenario (`OVERSPEED`, `CONGESTION`, `WET_ROAD`, `COLLISION`, `EMERGENCY`).
 - `GET /api/simulation/status`: Current simulation mode and progress.
 
 ### Live Computer Vision Stream
 - `GET /api/cv/feed`: Real-time MJPEG video stream with bounding boxes and HUD overlay.
-- `GET /api/cv/stats`: Summary metrics for vehicles, speeds, and potholes currently in frame.
+- `GET /api/cv/stats`: Summary metrics for vehicles and speeds currently in frame.
+- `GET /api/cv/vehicles`: Vehicles seen by the live camera with snapshot URL, speed now/avg/top, colour, heading, alerts, and session totals.
+- `GET /api/cv/vehicles/{label}/snapshot.jpg`: Snapshot taken when the vehicle entered the frame.
+- `POST /api/cv/vehicles/clear`: Clear the vehicle log.
 
 ## 3. Real-Time WebSocket
 - Endpoint: `ws://localhost:8000/ws/telemetry`

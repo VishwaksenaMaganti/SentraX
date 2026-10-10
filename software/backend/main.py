@@ -98,9 +98,26 @@ async def background_perception_loop():
                     esp8266_conn = True
 
             both_conn = bool(esp32_conn)
+            from software.backend.schemas.events import DetectionMode
+            from software.backend.engines.fusion_engine import fusion_engine
 
-            if both_conn:
-                # ESP32 CONNECTED: Ingest fresh live sensor telemetry
+            current_mode = fusion_engine.get_detection_mode()
+
+            if current_mode == DetectionMode.CAMERA:
+                # CAMERA MODE: Independent perception driven by camera vision
+                base_tele = simulator.telemetry.model_copy(deep=True)
+                base_tele.esp32_connected = esp32_conn
+                base_tele.esp8266_connected = esp8266_conn
+                base_tele.hardware_standby = False
+                base_tele.source = DeviceSource.CAMERA
+                fused_tele, new_events = DataFusionEngine.fuse_telemetry_and_cv(base_tele, cv_stats)
+                fused_tele.hardware_standby = False
+                simulator.telemetry = fused_tele
+                evt = DataFusionEngine.first_fresh(new_events)
+                await broadcast_telemetry_event(fused_tele, evt)
+
+            elif current_mode == DetectionMode.FUSION and both_conn:
+                # FUSION MODE WITH HARDWARE CONNECTED
                 live_tele = None
                 if live_ble and live_ble.is_connected and live_ble.latest_live_telemetry:
                     if (now - live_ble.latest_live_telemetry.timestamp < stall_tolerance):
@@ -124,16 +141,31 @@ async def background_perception_loop():
 
                     # A simulated camera must not stand in for the ultrasonic speed reading
                     fused_tele, new_events = DataFusionEngine.fuse_telemetry_and_cv(
-                        live_tele, cv_stats, allow_cv_speed_fallback=not cv_pipeline.use_simulation
+                        live_tele, cv_stats, allow_cv_speed_fallback=cv_pipeline.camera_service.is_connected
                     )
                     fused_tele.is_simulated = False
                     simulator.telemetry = fused_tele
-                    evt = new_events[0] if new_events else None
+                    evt = DataFusionEngine.first_fresh(new_events)
                     await broadcast_telemetry_event(fused_tele, evt)
                 else:
                     both_conn = False
 
-            if not both_conn:
+            elif current_mode == DetectionMode.FUSION and (simulator.telemetry.is_simulated or simulator.current_scenario != "NORMAL"):
+                # FUSION MODE WITH SIMULATED/DEMO TEST CASE ACTIVE
+                # The scripted 8-step demo is the ground truth: keep the synthetic camera scene's
+                # own detections (toppled / wrong-way vehicles) out of it.
+                demo_cv = cv_stats
+                if simulator.auto_demo_running:
+                    demo_cv = {
+                        "vehicle_count": simulator.telemetry.cv_vehicle_count,
+                    }
+                fused_tele, new_events = DataFusionEngine.fuse_telemetry_and_cv(simulator.telemetry, demo_cv)
+                fused_tele.hardware_standby = False
+                simulator.telemetry = fused_tele
+                evt = DataFusionEngine.first_fresh(new_events)
+                await broadcast_telemetry_event(fused_tele, evt)
+
+            else:
                 # HARDWARE STANDBY: Zero simulated data and wipe any cached telemetry
                 if hasattr(simulator, "_latest_live_telemetry"):
                     simulator._latest_live_telemetry = None
@@ -164,6 +196,7 @@ async def background_perception_loop():
                     sound_active=False,
                     rfid_active=False,
                     night_mode=False,
+                    cv_vehicle_count=cv_stats.get("vehicle_count", 0),
                     risk_score=0,
                     risk_reasons=[standby_msg],
                     source=DeviceSource.FUSION,
@@ -245,6 +278,13 @@ STATIC_DIR = FRONTEND_DIR / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/mobile", response_class=HTMLResponse)
+@app.get("/mobile/", response_class=HTMLResponse)
+async def serve_mobile():
+    """SentraX Drive: the phone app (map-first, served to any phone on the LAN)."""
+    return FileResponse(FRONTEND_DIR / "templates" / "mobile.html")
 
 
 @app.get("/", response_class=HTMLResponse)

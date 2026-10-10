@@ -29,6 +29,7 @@ from software.backend.engines.risk_engine import RoadRiskEngine
 from software.backend.engines.recommendation_engine import RecommendationEngine
 from software.backend.engines.emergency_tracker import emergency_tracker
 from software.backend.engines.speed_tracker import speed_tracker
+from software.backend.core.sensors import read_ir, sound_filter
 from software.backend.core.config import settings
 
 logger = logging.getLogger("sentrax.live_serial")
@@ -283,7 +284,7 @@ class LiveSerialManager:
         if line.startswith("{") and line.endswith("}"):
             try:
                 d = json.loads(line)
-                ir_list = d.get("ir", [0, 0, 0, 0])
+                ir_list = read_ir(d.get("ir"), bool(d.get("irfix", 0)))
                 ir_bools = [bool(x) for x in ir_list]
 
                 # Check ESP8266 bridge flag in ESP32 payload
@@ -301,6 +302,8 @@ class LiveSerialManager:
                 both_conn = bool(self.is_esp32_connected)
 
                 alert_str = d.get("alert", "NORMAL")
+                sound_on, collision_on = sound_filter.observe(
+                    d.get("sound", 0), alert_str, bool(d.get("sndfix", 0)), now)
                 cond = RoadCondition.WET if (alert_str == "WET_ROAD" or d.get("moist", 3000) < 2000) else RoadCondition.DRY
                 traf = TrafficLevel.CONGESTED if (alert_str == "CONGESTION" or sum(ir_list) >= 2) else TrafficLevel.LIGHT
 
@@ -314,7 +317,7 @@ class LiveSerialManager:
                     traffic_count=sum(ir_list),
                     traffic_level=traf,
                     road_condition=cond,
-                    collision=(alert_str == "COLLISION" or bool(d.get("sound", 0))),
+                    collision=collision_on,
                     wrong_way=(alert_str == "WRONG_WAY"),
                     stalled_vehicle=(alert_str == "STALLED"),
                     emergency_vehicle=(alert_str == "EMERGENCY" or bool(d.get("rfid", 0))),
@@ -322,7 +325,7 @@ class LiveSerialManager:
                     humidity_pct=float(d.get("hum", 55.0)),
                     moisture_raw=int(d.get("moist", 3100)),
                     ir_sensors=ir_bools,
-                    sound_active=bool(d.get("sound", 0)),
+                    sound_active=sound_on,
                     rfid_active=bool(d.get("rfid", 0)),
                     night_mode=bool(d.get("night", 0)),
                     source=DeviceSource.ESP32,

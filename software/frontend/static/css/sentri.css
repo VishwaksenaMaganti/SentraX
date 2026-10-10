@@ -1,0 +1,363 @@
+/* ==========================================================================
+   Sentri: poses, faces, props and reactions.
+   Colours are CSS variables so each host (dashboard, mobile app) can grade
+   the character to its own palette. Pivots use view-box coordinates so props
+   held in a hand never shift the joint.
+   ========================================================================== */
+
+.sentri {
+    --sx-accent: #E1A43A;
+    --sx-accent-dark: #B97E1F;
+    --sx-crit: #C4493B;
+    --sx-rain: #6F98A8;
+    --sx-paper: #FBF7EF;
+    --sx-ink: #221D19;
+    --sx-ink-soft: #6E655A;
+    --sx-shell: #F6F2EC;
+    --sx-shell-shade: #DED6CB;
+    --sx-seam: #D3CABE;
+    --sx-reflect: #FBF3E2;
+    --sx-blush: rgba(240, 140, 140, 0.45);
+    --sx-blush-strong: rgba(232, 108, 116, 0.75);
+    --sx-heart: #E5616E;
+    --sx-mouth: #7A3B3B;
+
+    --sx-bubble-bg: var(--sx-paper);
+    --sx-bubble-ink: var(--sx-ink);
+    --sx-bubble-muted: #6A6156;
+
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.sentri-stage {
+    width: 100%;
+    max-width: 240px;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+.sentri[data-size="sm"] .sentri-stage { max-width: 96px; }
+.sentri[data-size="md"] .sentri-stage { max-width: 190px; }
+.sentri[data-size="lg"] .sentri-stage { max-width: 280px; }
+
+.sentri-svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+/* Speech bubble ----------------------------------------------------------- */
+.sentri-bubble {
+    position: relative;
+    width: 100%;
+    max-width: 260px;
+    padding: 12px 15px 13px;
+    border-radius: 16px;
+    background: var(--sx-bubble-bg);
+    color: var(--sx-bubble-ink);
+    box-shadow: 0 14px 30px -18px rgba(34, 29, 25, 0.55), inset 0 -2px 0 rgba(34, 29, 25, 0.06);
+}
+.sentri-bubble::before {
+    content: "";
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    background: inherit;
+    border-radius: 3px;
+    transform: translateX(-50%) rotate(45deg);
+}
+.sentri-bubble-title { position: relative; font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+.sentri-bubble-line { position: relative; margin-top: 3px; font-size: 13.5px; line-height: 1.42; color: var(--sx-bubble-muted); }
+.sentri[data-tone="crit"] .sentri-bubble { --sx-bubble-bg: var(--sx-crit); --sx-bubble-ink: #FFF8F2; --sx-bubble-muted: rgba(255, 248, 242, 0.9); }
+.sentri[data-tone="warn"] .sentri-bubble { box-shadow: inset 0 0 0 2px var(--sx-accent), 0 14px 30px -18px rgba(34, 29, 25, 0.55); }
+.sentri.sentri-pop .sentri-bubble { animation: sx-bubble-pop 480ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* Pivots (view-box units) ------------------------------------------------- */
+.sentri .sx-rig      { transform-box: view-box; transform-origin: 110px 279px; }
+.sentri .sx-shadow   { transform-box: view-box; transform-origin: 110px 279px; }
+.sentri .head-look   { transform-box: view-box; transform-origin: 110px 122px; }
+.sentri .head        { transform-box: view-box; transform-origin: 110px 122px; }
+.sentri .arm-l       { transform-box: view-box; transform-origin: 54px 146px; }
+.sentri .arm-r       { transform-box: view-box; transform-origin: 166px 146px; }
+.sentri .leg-l       { transform-box: view-box; transform-origin: 92px 238px; }
+.sentri .leg-r       { transform-box: view-box; transform-origin: 128px 238px; }
+.sentri .bow         { transform-box: view-box; transform-origin: 140px 50px; }
+.sentri .prop-cone   { transform-box: view-box; transform-origin: 198px 274px; }
+.sentri .speeder-car { transform-box: view-box; transform-origin: 14px 250px; }
+.sentri .q           { transform-box: fill-box; transform-origin: 50% 100%; }
+.sentri .blinker, .sentri .m, .sentri .brow, .sentri .spiral, .sentri .spark, .sentri .heart,
+.sentri .sun-rays, .sentri .prop-alert, .sentri .prop-uturn, .sentri .wand-glow, .sentri .cheek {
+    transform-box: fill-box; transform-origin: 50% 50%;
+}
+
+/* Smooth joints between poses */
+.sentri .arm, .sentri .head, .sentri .brow, .sentri .bow {
+    transition: transform 380ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.sentri .face-look { transition: none; }
+
+/* Defaults ---------------------------------------------------------------- */
+.sentri .prop,
+.sentri .eyes,
+.sentri .brows,
+.sentri .m { display: none; }
+.sentri .eyes-normal,
+.sentri .m-smile { display: inline; }
+.sentri .blinker { transition: transform 70ms ease-out; }
+.sentri.sentri-blink .blinker { transform: scaleY(0.1); }
+
+/* Idle life */
+.sentri .sx-rig { animation: sx-float 3.6s ease-in-out infinite; }
+.sentri .sx-shadow { animation: sx-shadow 3.6s ease-in-out infinite; }
+.sentri.sentri-pop .sentri-stage,
+.sentri.sentri-poke .sentri-stage { animation: sx-squash 460ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* ---- standby: asleep, head tipped, zzz ---- */
+.sentri[data-mood="standby"] .eyes-normal { display: none; }
+.sentri[data-mood="standby"] .eyes-closed,
+.sentri[data-mood="standby"] .prop-zzz { display: inline; }
+.sentri[data-mood="standby"] .m-smile { display: none; }
+.sentri[data-mood="standby"] .m-o { display: inline; transform: scale(0.7); }
+.sentri[data-mood="standby"] .head { transform: rotate(-8deg); }
+.sentri[data-mood="standby"] .sx-rig { animation: sx-breathe 4.8s ease-in-out infinite; }
+.sentri[data-mood="standby"] .z { animation: sx-z 3s ease-in infinite; }
+.sentri[data-mood="standby"] .z2 { animation-delay: 1s; }
+.sentri[data-mood="standby"] .z3 { animation-delay: 2s; }
+
+/* ---- clear: sparkly, a friendly wave now and then ---- */
+.sentri[data-mood="clear"] .prop-sparkle { display: inline; }
+.sentri[data-mood="clear"] .spark { animation: sx-twinkle 2.6s ease-in-out infinite; }
+.sentri[data-mood="clear"] .k2 { animation-delay: 1.1s; }
+.sentri[data-mood="clear"] .arm-r { animation: sx-wave-idle 6s ease-in-out infinite; }
+.sentri[data-mood="clear"] .bow { animation: sx-bow 6s ease-in-out infinite; }
+.sentri[data-mood="clear"] .leg-l { animation: sx-step 1.8s ease-in-out infinite; }
+.sentri[data-mood="clear"] .leg-r { animation: sx-step 1.8s ease-in-out infinite 0.9s; }
+
+/* ---- slowdown: SLOW paddle up, other palm out, serious brows ---- */
+.sentri[data-mood="slowdown"] .prop-paddle,
+.sentri[data-mood="slowdown"] .brows { display: inline; }
+.sentri[data-mood="slowdown"] .arm-r { transform: rotate(-165deg); animation: sx-paddle 1.1s ease-in-out infinite; }
+.sentri[data-mood="slowdown"] .arm-l { transform: rotate(45deg); }
+.sentri[data-mood="slowdown"] .m-smile { display: none; }
+.sentri[data-mood="slowdown"] .m-flat { display: inline; }
+
+/* ---- emergency: light wand waving, worried brows, sidestep ---- */
+.sentri[data-mood="emergency"] .prop-wand,
+.sentri[data-mood="emergency"] .brows { display: inline; }
+.sentri[data-mood="emergency"] .brow-l { transform: rotate(-30deg) translateY(-2px); }
+.sentri[data-mood="emergency"] .brow-r { transform: rotate(30deg) translateY(-2px); }
+.sentri[data-mood="emergency"] .wand-glow { animation: sx-wand 0.5s steps(1) infinite; }
+.sentri[data-mood="emergency"] .arm-r { animation: sx-wand-wave 0.7s ease-in-out infinite; }
+.sentri[data-mood="emergency"] .arm-l { transform: rotate(45deg); }
+.sentri[data-mood="emergency"] .sx-rig { animation: sx-sidestep 1.4s ease-in-out infinite; }
+.sentri[data-mood="emergency"] .m-smile { display: none; }
+.sentri[data-mood="emergency"] .m-o { display: inline; }
+
+/* ---- accident: hands up by her head, big round eyes, warning sign ---- */
+.sentri[data-mood="accident"] .eyes-normal { display: none; }
+.sentri[data-mood="accident"] .eyes-shock,
+.sentri[data-mood="accident"] .prop-alert { display: inline; }
+.sentri[data-mood="accident"] .prop-alert { animation: sx-throb 0.6s ease-in-out infinite; }
+.sentri[data-mood="accident"] .arm-l { transform: rotate(155deg); }
+.sentri[data-mood="accident"] .arm-r { transform: rotate(-155deg); }
+.sentri[data-mood="accident"] .m-smile { display: none; }
+.sentri[data-mood="accident"] .m-o { display: inline; transform: scale(1.3); }
+.sentri[data-mood="accident"] .sx-rig { animation: sx-shake 0.4s linear infinite; }
+
+/* ---- wrong way: stop arm, stern brows, U-turn sign, head shake ---- */
+.sentri[data-mood="wrong_way"] .prop-uturn,
+.sentri[data-mood="wrong_way"] .brows { display: inline; }
+.sentri[data-mood="wrong_way"] .prop-uturn { animation: sx-throb 0.8s ease-in-out infinite; }
+.sentri[data-mood="wrong_way"] .arm-r { transform: rotate(-80deg); }
+.sentri[data-mood="wrong_way"] .head { animation: sx-no 0.6s ease-in-out infinite; }
+.sentri[data-mood="wrong_way"] .m-smile { display: none; }
+.sentri[data-mood="wrong_way"] .m-worry { display: inline; }
+
+/* ---- stall: cone, curious tilt, point at it ---- */
+.sentri[data-mood="stall"] .prop-cone { display: inline; animation: sx-cone 1.6s ease-in-out infinite; }
+.sentri[data-mood="stall"] .head { transform: rotate(9deg); }
+.sentri[data-mood="stall"] .arm-r { transform: rotate(-35deg); }
+.sentri[data-mood="stall"] .m-smile { display: none; }
+.sentri[data-mood="stall"] .m-o { display: inline; transform: scale(0.75); }
+
+/* ---- congestion: patient, eyes shut, cars creeping ---- */
+.sentri[data-mood="congestion"] .eyes-normal { display: none; }
+.sentri[data-mood="congestion"] .eyes-closed,
+.sentri[data-mood="congestion"] .prop-cars { display: inline; }
+.sentri[data-mood="congestion"] .sx-rig { animation: sx-sway 2.4s ease-in-out infinite; }
+.sentri[data-mood="congestion"] .car { animation: sx-creep 2.4s ease-in-out infinite; }
+.sentri[data-mood="congestion"] .c2 { animation-delay: 1.2s; }
+.sentri[data-mood="congestion"] .m-smile { display: none; }
+.sentri[data-mood="congestion"] .m-flat { display: inline; }
+
+/* ---- rain: umbrella, raindrops ---- */
+.sentri[data-mood="rain"] .prop-umbrella,
+.sentri[data-mood="rain"] .prop-rain { display: inline; }
+.sentri[data-mood="rain"] .arm-r { transform: rotate(-170deg); animation: sx-umbrella 2.6s ease-in-out infinite; }
+.sentri[data-mood="rain"] .drop { animation: sx-drop 1.1s linear infinite; }
+.sentri[data-mood="rain"] .d2 { animation-delay: 0.3s; }
+.sentri[data-mood="rain"] .d3 { animation-delay: 0.6s; }
+.sentri[data-mood="rain"] .d4 { animation-delay: 0.15s; }
+.sentri[data-mood="rain"] .d5 { animation-delay: 0.8s; }
+
+/* ---- heat: sun, sweat, squeezed eyes, fanning, panting ---- */
+.sentri[data-mood="heat"] .eyes-normal { display: none; }
+.sentri[data-mood="heat"] .eyes-squint,
+.sentri[data-mood="heat"] .prop-sun,
+.sentri[data-mood="heat"] .prop-sweat { display: inline; }
+.sentri[data-mood="heat"] .sun-rays { animation: sx-spin 8s linear infinite; }
+.sentri[data-mood="heat"] .arm-l { animation: sx-fan 0.35s ease-in-out infinite; }
+.sentri[data-mood="heat"] .sweat { animation: sx-sweat 1.6s ease-in infinite; }
+.sentri[data-mood="heat"] .s2 { animation-delay: 0.8s; }
+.sentri[data-mood="heat"] .cheek { fill: var(--sx-blush-strong); }
+.sentri[data-mood="heat"] .m-smile { display: none; }
+.sentri[data-mood="heat"] .m-talk { display: inline; animation: sx-talk 0.5s ease-in-out infinite alternate; }
+
+/* ---- confused: too many hazards at once. Head tilt, one brow up, question marks ---- */
+.sentri[data-mood="confused"] .eyes-normal,
+.sentri[data-mood="confused"] .m-smile { display: none; }
+.sentri[data-mood="confused"] .eyes-confused,
+.sentri[data-mood="confused"] .brows,
+.sentri[data-mood="confused"] .m-wavy,
+.sentri[data-mood="confused"] .prop-question,
+.sentri[data-mood="confused"] .prop-sweat { display: inline; }
+.sentri[data-mood="confused"] .s1 { display: none; }
+.sentri[data-mood="confused"] .brow-l { transform: rotate(-16deg) translateY(-5px); }
+.sentri[data-mood="confused"] .brow-r { transform: rotate(8deg) translateY(1px); }
+.sentri[data-mood="confused"] .head { animation: sx-huh 2.4s ease-in-out infinite; }
+.sentri[data-mood="confused"] .arm-r { transform: rotate(-160deg); animation: sx-scratch 0.5s ease-in-out infinite; }
+.sentri[data-mood="confused"] .q { animation: sx-q 1.8s ease-in-out infinite; }
+.sentri[data-mood="confused"] .q2 { animation-delay: 0.9s; }
+.sentri[data-mood="confused"] .sweat { animation: sx-sweat 1.8s ease-in infinite; }
+
+/* ---- speeder: a fast car closing in behind. Glances back, points left to let it pass ---- */
+.sentri[data-mood="speeder"] .prop-speeder,
+.sentri[data-mood="speeder"] .brows,
+.sentri[data-mood="speeder"] .prop-sweat { display: inline; }
+.sentri[data-mood="speeder"] .m-smile { display: none; }
+.sentri[data-mood="speeder"] .m-o { display: inline; transform: scale(0.8); }
+.sentri[data-mood="speeder"] .brow-l { transform: rotate(-24deg) translateY(-3px); }
+.sentri[data-mood="speeder"] .brow-r { transform: rotate(24deg) translateY(-3px); }
+.sentri[data-mood="speeder"] .head { animation: sx-glance 1.6s ease-in-out infinite; }
+.sentri[data-mood="speeder"] .arm-l { transform: rotate(70deg); animation: sx-point-left 1.6s ease-in-out infinite; }
+.sentri[data-mood="speeder"] .speeder-car { animation: sx-zoom-in 1.6s cubic-bezier(0.3, 0.8, 0.4, 1) infinite; }
+.sentri[data-mood="speeder"] .sweat { animation: sx-sweat 1.4s ease-in infinite; }
+
+/* Talking: her little mouth opens and closes ------------------------------- */
+.sentri.sentri-talking .m { display: none; }
+.sentri.sentri-talking .m-talk { display: inline; animation: sx-talk 0.22s ease-in-out infinite alternate; }
+
+/* Reactions (data-act) override the mood briefly --------------------------- */
+.sentri[data-act] .prop-zzz,
+.sentri[data-act] .brows { display: none; }
+.sentri[data-act] .eyes,
+.sentri[data-act] .m { display: none !important; }
+
+.sentri[data-act="laugh"] .eyes-happy,
+.sentri[data-act="laugh"] .m-cat { display: inline !important; }
+.sentri[data-act="laugh"] .cheek { fill: var(--sx-blush-strong); transform: scale(1.15); }
+.sentri[data-act="laugh"] .head { animation: sx-giggle 0.18s ease-in-out 5 alternate; }
+.sentri[data-act="laugh"] .bow { animation: sx-bow-quick 0.6s ease-in-out 2; }
+
+.sentri[data-act="pet"] .eyes-heart,
+.sentri[data-act="pet"] .m-smile,
+.sentri[data-act="pet"] .prop-hearts { display: inline !important; }
+.sentri[data-act="pet"] .cheek { fill: var(--sx-blush-strong); transform: scale(1.25); }
+.sentri[data-act="pet"] .heart { animation: sx-heart 1.6s ease-out forwards; }
+.sentri[data-act="pet"] .h2 { animation-delay: 0.25s; }
+.sentri[data-act="pet"] .h3 { animation-delay: 0.5s; }
+.sentri[data-act="pet"] .head { transform: rotate(-7deg); }
+.sentri[data-act="pet"] .eyes-heart { animation: sx-throb 0.5s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+
+.sentri[data-act="dizzy"] .eyes-dizzy,
+.sentri[data-act="dizzy"] .m-worry { display: inline !important; }
+.sentri[data-act="dizzy"] .eye-bridge { display: none; }
+.sentri[data-act="dizzy"] .spiral { animation: sx-spin 0.7s linear infinite; }
+.sentri[data-act="dizzy"] .sx-rig { animation: sx-wobble 0.9s ease-in-out infinite; }
+
+.sentri[data-act="wave"] .eyes-wink,
+.sentri[data-act="wave"] .m-smile { display: inline !important; }
+.sentri[data-act="wave"] .arm-r { animation: sx-wave 1.2s ease-in-out; transform: rotate(-150deg); }
+.sentri[data-act="wave"] .head { transform: rotate(5deg); }
+
+.sentri[data-act="highfive"] .eyes-happy,
+.sentri[data-act="highfive"] .m-cat { display: inline !important; }
+.sentri[data-act="highfive"] .arm-r { animation: sx-highfive 1.4s cubic-bezier(0.34, 1.56, 0.64, 1); transform: rotate(-176deg); }
+
+.sentri[data-act="wave"] .prop-paddle, .sentri[data-act="wave"] .prop-wand, .sentri[data-act="wave"] .prop-umbrella,
+.sentri[data-act="highfive"] .prop-paddle, .sentri[data-act="highfive"] .prop-wand, .sentri[data-act="highfive"] .prop-umbrella { display: none; }
+
+/* bye: happy eyes, big wave with both arms, hearts and sparkles (arrived) */
+.sentri[data-act="bye"] .prop:not(.prop-sparkle):not(.prop-hearts) { display: none !important; }
+.sentri[data-act="bye"] .eyes-happy,
+.sentri[data-act="bye"] .m-cat,
+.sentri[data-act="bye"] .prop-sparkle,
+.sentri[data-act="bye"] .prop-hearts { display: inline !important; }
+.sentri[data-act="bye"] .cheek { fill: var(--sx-blush-strong); transform: scale(1.2); }
+.sentri[data-act="bye"] .arm-r { animation: sx-wave 1.1s ease-in-out 4; transform: rotate(-150deg); }
+.sentri[data-act="bye"] .arm-l { animation: sx-wave-l 1.1s ease-in-out 4 0.2s; transform: rotate(140deg); }
+.sentri[data-act="bye"] .head { animation: sx-giggle 0.55s ease-in-out infinite alternate; }
+.sentri[data-act="bye"] .bow { animation: sx-bow-quick 0.6s ease-in-out infinite; }
+.sentri[data-act="bye"] .spark { animation: sx-twinkle 1.2s ease-in-out infinite; }
+.sentri[data-act="bye"] .k2 { animation-delay: 0.6s; }
+.sentri[data-act="bye"] .heart { animation: sx-heart 1.8s ease-out infinite; }
+.sentri[data-act="bye"] .h2 { animation-delay: 0.5s; }
+.sentri[data-act="bye"] .h3 { animation-delay: 1s; }
+.sentri[data-act="bye"] .sx-rig { animation: sx-hop 0.55s ease-in-out infinite alternate; }
+
+.sentri[data-act="yawn"] .eyes-closed,
+.sentri[data-act="yawn"] .m-yawn { display: inline !important; }
+.sentri[data-act="yawn"] .m-yawn { animation: sx-yawn 2.2s ease-in-out; }
+.sentri[data-act="yawn"] .arm-l { transform: rotate(150deg); }
+.sentri[data-act="yawn"] .head { transform: rotate(-5deg); }
+
+/* Keyframes --------------------------------------------------------------- */
+@keyframes sx-bubble-pop { 0% { transform: scale(0.86) translateY(6px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes sx-float     { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes sx-shadow    { 0%, 100% { transform: scaleX(1); opacity: 0.2; } 50% { transform: scaleX(0.9); opacity: 0.13; } }
+@keyframes sx-breathe   { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.02, 0.98); } }
+@keyframes sx-squash    { 0% { transform: scale(1, 1); } 30% { transform: scale(1.07, 0.92); } 60% { transform: scale(0.97, 1.04); } 100% { transform: scale(1, 1); } }
+@keyframes sx-talk      { from { transform: scaleY(0.35); } to { transform: scaleY(1.1); } }
+@keyframes sx-z         { 0% { transform: translate(0, 8px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(8px, -14px); opacity: 0; } }
+@keyframes sx-twinkle   { 0%, 100% { transform: scale(0.3) rotate(0deg); opacity: 0; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
+@keyframes sx-step      { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(5deg) translateY(-2px); } }
+@keyframes sx-bow       { 0%, 80%, 100% { transform: rotate(0deg); } 85% { transform: rotate(-12deg); } 90% { transform: rotate(10deg); } 95% { transform: rotate(-6deg); } }
+@keyframes sx-bow-quick { 0%, 100% { transform: rotate(0deg); } 33% { transform: rotate(-14deg); } 66% { transform: rotate(12deg); } }
+@keyframes sx-wave-idle { 0%, 78%, 100% { transform: rotate(0deg); } 82% { transform: rotate(-150deg); } 86% { transform: rotate(-120deg); } 90% { transform: rotate(-150deg); } 94% { transform: rotate(-125deg); } }
+@keyframes sx-wave      { 0% { transform: rotate(0deg); } 25% { transform: rotate(-150deg); } 45% { transform: rotate(-118deg); } 65% { transform: rotate(-150deg); } 85% { transform: rotate(-120deg); } 100% { transform: rotate(-150deg); } }
+@keyframes sx-highfive  { 0% { transform: rotate(0deg); } 40% { transform: rotate(-176deg); } 55% { transform: rotate(-168deg) translateY(4px); } 100% { transform: rotate(-176deg); } }
+@keyframes sx-paddle    { 0%, 100% { transform: rotate(-165deg); } 50% { transform: rotate(-158deg); } }
+@keyframes sx-wand      { 0% { fill: var(--sx-crit); } 50% { fill: var(--sx-accent); } }
+@keyframes sx-wand-wave { 0%, 100% { transform: rotate(-150deg); } 50% { transform: rotate(-178deg); } }
+@keyframes sx-sidestep  { 0%, 100% { transform: translateX(0) rotate(0); } 50% { transform: translateX(-8px) rotate(-2deg); } }
+@keyframes sx-shake     { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px) rotate(-1deg); } 75% { transform: translateX(3px) rotate(1deg); } }
+@keyframes sx-throb     { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+@keyframes sx-no        { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+@keyframes sx-cone      { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-6deg); } }
+@keyframes sx-sway      { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
+@keyframes sx-creep     { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
+@keyframes sx-umbrella  { 0%, 100% { transform: rotate(-170deg); } 50% { transform: rotate(-165deg); } }
+@keyframes sx-drop      { 0% { transform: translateY(-20px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(40px); opacity: 0; } }
+@keyframes sx-spin      { to { transform: rotate(360deg); } }
+@keyframes sx-fan       { 0%, 100% { transform: rotate(150deg); } 50% { transform: rotate(122deg); } }
+@keyframes sx-sweat     { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(24px); opacity: 0; } }
+@keyframes sx-giggle    { from { transform: rotate(-3deg) translateY(0); } to { transform: rotate(3deg) translateY(-2px); } }
+@keyframes sx-heart     { 0% { transform: translateY(10px) scale(0.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-26px) scale(1.1); opacity: 0; } }
+@keyframes sx-wobble    { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+@keyframes sx-huh       { 0%, 100% { transform: rotate(-10deg); } 45% { transform: rotate(-14deg) translateY(1px); } 70% { transform: rotate(6deg); } }
+@keyframes sx-scratch   { 0%, 100% { transform: rotate(-160deg); } 50% { transform: rotate(-150deg); } }
+@keyframes sx-q         { 0%, 100% { transform: translateY(0) rotate(-6deg); opacity: 0.55; } 50% { transform: translateY(-6px) rotate(8deg); opacity: 1; } }
+@keyframes sx-glance    { 0%, 35%, 100% { transform: rotate(0deg); } 50%, 80% { transform: rotate(-14deg) translateX(-4px); } }
+@keyframes sx-point-left { 0%, 100% { transform: rotate(70deg); } 50% { transform: rotate(82deg); } }
+@keyframes sx-zoom-in   { 0% { transform: translateX(-60px); opacity: 0; } 25% { opacity: 1; } 70% { transform: translateX(10px); opacity: 1; } 100% { transform: translateX(26px); opacity: 0; } }
+@keyframes sx-wave-l    { 0% { transform: rotate(0deg); } 25% { transform: rotate(140deg); } 45% { transform: rotate(112deg); } 65% { transform: rotate(140deg); } 85% { transform: rotate(115deg); } 100% { transform: rotate(140deg); } }
+@keyframes sx-hop       { from { transform: translateY(0); } to { transform: translateY(-7px); } }
+@keyframes sx-yawn      { 0% { transform: scaleY(0.3); } 30%, 70% { transform: scaleY(1.1); } 100% { transform: scaleY(0.3); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .sentri *, .sentri .sentri-stage, .sentri .sentri-bubble { animation: none !important; transition: none !important; }
+}

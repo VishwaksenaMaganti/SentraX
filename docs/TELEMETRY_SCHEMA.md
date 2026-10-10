@@ -31,7 +31,6 @@ Every incoming reading from physical hardware, BLE packets, or the multi-modal f
   "rfid_active": false,
   "night_mode": false,
   "cv_vehicle_count": 2,
-  "cv_pothole_count": 0,
   "hazard_count": 0,
   "risk_score": 30,
   "risk_reasons": [

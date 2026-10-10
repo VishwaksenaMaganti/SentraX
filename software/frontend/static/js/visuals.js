@@ -18,8 +18,8 @@
         amber: [235, 160, 70],
         crit: [229, 52, 43],
         info: [142, 162, 232],
-        white: [232, 236, 245],
-        off: [38, 46, 72]
+        white: [243, 239, 233],
+        off: [52, 47, 42]
     };
     const rgba = (c, a) => `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
 
@@ -33,6 +33,7 @@
         if (!t) return { tone: 'standby', label: 'Awaiting signal', sub: 'Pair the ESP32 to stream live data', pattern: 'off' };
         const occupied = (t.ir_sensors || []).map(Boolean);
         const stalledIdx = occupied.findIndex(Boolean);
+        if (t.vehicle_toppled) return { tone: 'crit', label: 'Vehicle toppled', sub: 'Rollover on the corridor', pattern: 'collision' };
         if (t.collision || t.sound_active) return { tone: 'crit', label: 'Accident ahead', sub: 'Slow down, impact detected', pattern: 'collision' };
         if (t.wrong_way) return { tone: 'crit', label: 'Wrong-way vehicle', sub: 'Stop and turn around', pattern: 'wrongway' };
         if (t.stalled_vehicle) return { tone: 'warn', label: 'Stalled vehicle', sub: stalledIdx >= 0 ? `Lane obstruction at IR${stalledIdx + 1}` : 'Lane obstruction', pattern: 'stalled' };
@@ -60,6 +61,8 @@
             new ResizeObserver(() => this.resize()).observe(this.canvas);
             this.resize();
             document.addEventListener('visibilitychange', () => this.kick());
+            // Start animating as soon as the pairing screen clears
+            new MutationObserver(() => this.kick()).observe($('hardware-standby-overlay'), { attributes: true, attributeFilter: ['class'] });
             this.kick();
         },
 
@@ -181,8 +184,8 @@
 
             // Asphalt
             const asphalt = ctx.createLinearGradient(0, road.top, 0, road.bottom);
-            asphalt.addColorStop(0, '#0F1527');
-            asphalt.addColorStop(1, '#0A0E1C');
+            asphalt.addColorStop(0, '#1A1816');
+            asphalt.addColorStop(1, '#121110');
             ctx.fillStyle = asphalt;
             ctx.fillRect(0, road.top, w, road.bottom - road.top);
 
@@ -345,7 +348,7 @@
             ctx.beginPath();
             ctx.roundRect(-L / 2, -W / 2, L, W, 6);
             ctx.fill();
-            ctx.fillStyle = '#1A2238';
+            ctx.fillStyle = '#2A2623';
             ctx.beginPath();
             ctx.roundRect(-L / 2 + 12, -W / 2 + 3, 20, W - 6, 3);
             ctx.fill();
@@ -385,7 +388,7 @@
                 });
             }
             document.addEventListener('visibilitychange', () => this.kick());
-            new MutationObserver(() => { this.kick(); corridor.kick(); }).observe($('hardware-standby-overlay'), { attributes: true, attributeFilter: ['class'] });
+            new MutationObserver(() => this.kick()).observe($('hardware-standby-overlay'), { attributes: true, attributeFilter: ['class'] });
             this.kick();
         },
 

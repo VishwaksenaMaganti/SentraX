@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentri Mood Sheet</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400..800&display=swap">
+<link rel="stylesheet" href="css/sentri.css">
+<style>
+    body { margin: 0; background: #EFE9DE; color: #1F1B16; font-family: Outfit, system-ui, sans-serif; }
+    header { padding: 40px 24px 8px; max-width: 1280px; margin: 0 auto; display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+    header p { margin: 6px 0 0; color: #6A6156; max-width: 62ch; }
+    .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { font: inherit; border: 0; border-radius: 999px; padding: 9px 16px; background: #1F1B16; color: #FBF7EF; font-weight: 600; cursor: pointer; }
+    button:active { transform: scale(0.98); }
+    .grid { max-width: 1280px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 28px 20px; }
+    .cell { background: #F8F4EC; border-radius: 22px; padding: 22px 16px 18px; box-shadow: 0 1px 0 rgba(31, 27, 22, 0.06); }
+    .cell .tag { font: 600 11px/1 ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #6A6156; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<header>
+    <div>
+        <h1>Sentri: SentraX road co-pilot</h1>
+        <p>Soft inflatable care-bot with a bow and a reflective sash. Tap her head to make her giggle, tap five times fast to make her dizzy, stroke her head for heart eyes, tap her body to wink and wave, press and hold for a high-five.</p>
+    </div>
+    <div class="acts">
+        <button type="button" data-act="laugh">Laugh</button>
+        <button type="button" data-act="wave">Wave</button>
+        <button type="button" data-act="highfive">High-five</button>
+        <button type="button" data-act="pet">Pet</button>
+        <button type="button" data-act="dizzy">Dizzy</button>
+        <button type="button" data-act="yawn">Yawn</button>
+    </div>
+</header>
+<div class="grid" id="grid"></div>
+<script src="js/sentri.js"></script>
+<script>
+    const grid = document.getElementById('grid');
+    const bots = Sentri.moods.map(m => {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.innerHTML = `<div class="tag">${m.replace('_', ' ')}</div><div></div>`;
+        grid.appendChild(cell);
+        return Sentri.mount(cell.lastChild, { mood: m, size: 'md' });
+    });
+    document.querySelectorAll('[data-act]').forEach(b =>
+        b.addEventListener('click', () => bots.forEach(bot => bot.act(b.dataset.act, 2000))));
+</script>
+</body>
+</html>

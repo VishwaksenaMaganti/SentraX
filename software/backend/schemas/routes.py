@@ -22,7 +22,6 @@ class RoadSegment(BaseModel):
     color_hex: str = "#22c55e" # Green, Yellow, Orange, Red
     recommended_speed_kmh: float = 80.0
     posted_speed_kmh: float = 80.0
-    pothole_count: int = 0
     collision_count: int = 0
     wet: bool = False
     traffic_density: str = "NORMAL"
@@ -60,7 +59,6 @@ class RouteHealthResponse(BaseModel):
     weather_temp_c: float = 26.0
     weather_aqi: int = 72
     google_maps_configured: bool = False
-    pothole_count: int
     collision_zones_count: int
     wet_sections_count: int
     segments: List[RoadSegment] = Field(default_factory=list)

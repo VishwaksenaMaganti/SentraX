@@ -96,7 +96,11 @@
             const original = window.updateTelemetryUI;
             window.updateTelemetryUI = function (t) {
                 original(t);
-                if (t && t.esp32_connected) {
+                // Live when the ESP32 streams, or when app.js has unlocked the dashboard for a
+                // camera-only session or the demo sequence (pairing screen hidden).
+                const gate = document.getElementById('hardware-standby-overlay');
+                const unlocked = gate && gate.classList.contains('hidden');
+                if (t && (t.esp32_connected || unlocked)) {
                     document.dispatchEvent(new CustomEvent('sx:telemetry', { detail: t }));
                 }
             };
@@ -105,7 +109,11 @@
             const original = window.resetDashboardToStandby;
             window.resetDashboardToStandby = function (reason) {
                 original(reason);
-                document.dispatchEvent(new CustomEvent('sx:standby'));
+                // app.js skips the reset while a camera session or the demo keeps the dashboard unlocked
+                const gate = document.getElementById('hardware-standby-overlay');
+                if (!gate || !gate.classList.contains('hidden')) {
+                    document.dispatchEvent(new CustomEvent('sx:standby'));
+                }
             };
         }
     }
@@ -313,6 +321,7 @@
     // ---------------------------------------------------------------------
     const pageHooks = {
         intelligence: { enter: enterIntelligence, leave: leaveIntelligence },
+        cv: { enter: enterVision, leave: leaveVision },
         events: { enter: () => loadEvents() }
     };
     let currentTab = 'command-center';
@@ -353,28 +362,33 @@
     // Road Intelligence
     // ---------------------------------------------------------------------
     let intelTimer = null;
-    let cvTimer = null;
 
     function enterIntelligence() {
-        const feed = $('cv-feed');
-        if (feed && !feed.getAttribute('src')) feed.src = feed.dataset.src;
         loadAnalytics();
         loadRoadHealth();
-        loadCvStats();
         intelTimer = setInterval(() => { loadAnalytics(); loadRoadHealth(); }, 15000);
-        cvTimer = setInterval(loadCvStats, 3000);
     }
 
     function leaveIntelligence() {
-        // Close the MJPEG connection while the camera is off-screen
-        const feed = $('cv-feed');
-        if (feed) feed.removeAttribute('src');
         clearInterval(intelTimer);
-        clearInterval(cvTimer);
+    }
+
+    // ---------------------------------------------------------------------
+    // Computer Vision: stats and tables are filled by app.js (pollFusionAndCV);
+    // here the MJPEG stream is opened only while the tab is visible.
+    // ---------------------------------------------------------------------
+    function enterVision() {
+        const feed = $('cv-feed-img');
+        if (feed) feed.src = `${feed.dataset.src}?t=${Date.now()}`;
+    }
+
+    function leaveVision() {
+        const feed = $('cv-feed-img');
+        if (feed) feed.removeAttribute('src');
     }
 
     const CRIT_TYPES = new Set(['COLLISION', 'WRONG_WAY', 'NEAR_COLLISION']);
-    const WARN_TYPES = new Set(['STALLED', 'OVERSPEED', 'CONGESTION', 'WET_ROAD', 'POTHOLE', 'HIGH_TEMP', 'TRAFFIC_JAM']);
+    const WARN_TYPES = new Set(['STALLED', 'OVERSPEED', 'CONGESTION', 'WET_ROAD', 'HIGH_TEMP', 'TRAFFIC_JAM']);
 
     async function loadAnalytics() {
         try {
@@ -425,20 +439,6 @@
             $('an-health-band').textContent = band ? `${titleCase(band)} band, prototype score` : 'Prototype score';
         } catch (err) {
             console.warn('[SentraX UI] road health unavailable', err);
-        }
-    }
-
-    async function loadCvStats() {
-        try {
-            const res = await fetch('/api/cv/stats');
-            if (!res.ok) return;
-            const s = await res.json();
-            $('cv-vehicles').textContent = s.vehicle_count ?? 0;
-            $('cv-potholes').textContent = s.pothole_count ?? 0;
-            $('cv-stopped').textContent = s.stopped_vehicle_count ?? 0;
-            $('cv-wrongway').textContent = s.wrong_way_count ?? 0;
-        } catch (err) {
-            /* camera pipeline busy; keep last values */
         }
     }
 

@@ -7,6 +7,7 @@ and streams live physical telemetry into the SentraX platform without simulation
 import asyncio
 import json
 import logging
+import sys
 import time
 from typing import Optional, Callable, Dict, Any
 
@@ -22,6 +23,7 @@ from software.backend.engines.risk_engine import RoadRiskEngine
 from software.backend.engines.recommendation_engine import RecommendationEngine
 from software.backend.engines.emergency_tracker import emergency_tracker
 from software.backend.engines.speed_tracker import speed_tracker
+from software.backend.core.sensors import read_ir, sound_filter
 
 logger = logging.getLogger("sentrax.live_ble")
 
@@ -30,6 +32,27 @@ try:
     BLEAK_AVAILABLE = True
 except ImportError:
     BLEAK_AVAILABLE = False
+
+
+def _ensure_mta_thread():
+    """Undoes a single-threaded (STA) COM apartment on the current (event-loop) thread.
+
+    bleak's WinRT backend only receives callbacks on an MTA thread; on an STA thread every scan
+    fails with "Thread is configured for Windows GUI" and connects hang forever. Libraries such
+    as OpenCV's DirectShow backend switch whichever thread they run on to STA.
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+    ole32 = ctypes.windll.ole32
+    apt_type, qualifier = ctypes.c_int(), ctypes.c_int()
+    for _ in range(8):  # CoInitialize is reference-counted; unwind a few nested calls at most
+        if ole32.CoGetApartmentType(ctypes.byref(apt_type), ctypes.byref(qualifier)) != 0:
+            return  # COM not initialised yet: WinRT will set it up as MTA
+        if apt_type.value not in (0, 3):  # APTTYPE_STA / APTTYPE_MAINSTA
+            return
+        logger.warning("Event-loop thread was in a COM STA apartment; resetting it for Bluetooth")
+        ole32.CoUninitialize()
 
 
 class LiveBLEManager:
@@ -48,6 +71,23 @@ class LiveBLEManager:
         self.latest_live_telemetry: Optional[CanonicalTelemetry] = None
         self._discovered_ble_devices: Dict[str, Any] = {}
         self.last_error: str = ""
+        # Serialises connect attempts: a dashboard click and the auto-reconnect loop must never
+        # drive two BleakClients at the same ESP32 at once (that deadlocks the Windows stack).
+        self._connect_lock = asyncio.Lock()
+
+    CONNECT_TIMEOUT_S = 15.0
+    NOTIFY_TIMEOUT_S = 6.0
+    DISCONNECT_TIMEOUT_S = 5.0
+
+    async def _close_client(self):
+        """Disconnects and forgets the current client without triggering auto-reconnect."""
+        old, self.client = self.client, None  # _on_disconnected ignores clients that aren't current
+        if old is None:
+            return
+        try:
+            await asyncio.wait_for(old.disconnect(), self.DISCONNECT_TIMEOUT_S)
+        except Exception as e:
+            logger.debug("Ignoring error while closing old BLE client: %s", e)
 
     async def scan_devices(self, timeout: float = 4.0) -> list:
         """Scans for nearby Bluetooth devices advertising SentraX services or matching name."""
@@ -55,6 +95,7 @@ class LiveBLEManager:
             return []
         self.is_scanning = True
         found = []
+        _ensure_mta_thread()
         try:
             devices = await BleakScanner.discover(return_adv=True, timeout=timeout)
             for addr, (d, adv) in devices.items():
@@ -83,11 +124,21 @@ class LiveBLEManager:
             logger.warning(self.last_error)
             return False
 
-        # Cancel any pending auto-reconnect task
-        if self._reconnect_task and not self._reconnect_task.done():
+        # A manual connect cancels any pending auto-reconnect (but the reconnect loop must not cancel itself)
+        if (self._reconnect_task and not self._reconnect_task.done()
+                and self._reconnect_task is not asyncio.current_task()):
             self._reconnect_task.cancel()
             self._reconnect_task = None
+        self.auto_reconnect = True
+        _ensure_mta_thread()
 
+        async with self._connect_lock:
+            if self.is_connected and self.client and self.client.is_connected and (
+                    not address_or_name or address_or_name == self.connected_device_address):
+                return True  # another caller already connected while we waited
+            return await self._connect_locked(address_or_name)
+
+    async def _connect_locked(self, address_or_name: Optional[str]) -> bool:
         target_address = address_or_name
 
         if not target_address:
@@ -122,45 +173,70 @@ class LiveBLEManager:
                     details=None
                 )
 
-            self.client = BleakClient(
-                device_target,
-                disconnected_callback=self._on_disconnected,
-                winrt={"use_cached_services": False}
-            )
-            await self.client.connect(timeout=10.0)
+            # Drop any previous client first. Its disconnect callback is ignored, so this can no
+            # longer spawn an auto-reconnect that races the connect below.
+            self.is_connected = False
+            await self._close_client()
 
-            if self.client.is_connected:
-                self.is_connected = True
-                self.connected_device_address = target_address
-                emergency_tracker.reset_link()
-                speed_tracker.reset_link()
-                logger.info("Successfully connected to physical ESP32 over BLE!")
-
-                # Subscribe to Telemetry Notifications
+            last_exc: Optional[BaseException] = None
+            for attempt in range(1, 3):
+                client = BleakClient(
+                    device_target,
+                    disconnected_callback=self._on_disconnected,
+                    winrt={"use_cached_services": False}
+                )
+                self.client = client
                 try:
-                    await self.client.start_notify(CHAR_TELEMETRY_UUID, self._on_telemetry_packet)
-                except Exception as ne:
-                    logger.warning("Telemetry notify subscribe notice: %s", ne)
+                    # Hard ceiling: some WinRT calls inside connect() have no timeout of their own
+                    await asyncio.wait_for(client.connect(timeout=10.0), self.CONNECT_TIMEOUT_S)
+                    if not client.is_connected:
+                        raise ConnectionError("link dropped during service discovery")
 
-                # Subscribe to Events Notifications
-                try:
-                    await self.client.start_notify(CHAR_EVENTS_UUID, self._on_event_packet)
-                except Exception as ne:
-                    logger.warning("Events notify subscribe notice: %s", ne)
+                    # Subscribe before declaring the link live; a stuck CCCD write must not hang us
+                    await asyncio.wait_for(
+                        client.start_notify(CHAR_TELEMETRY_UUID, self._on_telemetry_packet),
+                        self.NOTIFY_TIMEOUT_S)
+                    try:
+                        await asyncio.wait_for(
+                            client.start_notify(CHAR_EVENTS_UUID, self._on_event_packet),
+                            self.NOTIFY_TIMEOUT_S)
+                    except Exception as ne:
+                        logger.warning("Events notify subscribe failed (telemetry still live): %s", ne)
+                    break
+                except Exception as ce:
+                    last_exc = ce
+                    logger.warning("BLE connect attempt %d failed: %r", attempt, ce)
+                    await self._close_client()
+                    if attempt == 1:
+                        await asyncio.sleep(1.5)
 
-                update_device_status("SENTRAX-ESP32", "CONNECTED", rssi=-60, last_event="BLE_CONNECTED")
-                self.last_error = ""
-                return True
+            if self.client is None or not self.client.is_connected:
+                raise last_exc or ConnectionError("connection failed")
+
+            self.is_connected = True
+            self.connected_device_address = target_address
+            self._rx_buffer = ""
+            emergency_tracker.reset_link()
+            speed_tracker.reset_link()
+            logger.info("Successfully connected to physical ESP32 over BLE!")
+            update_device_status("SENTRAX-ESP32", "CONNECTED", rssi=-60, last_event="BLE_CONNECTED")
+            self.last_error = ""
+            return True
         except Exception as e:
-            err_msg = str(e)
-            if "AccessDenied" in err_msg or "3" in err_msg:
+            err_msg = str(e) or type(e).__name__
+            if isinstance(e, asyncio.TimeoutError):
+                self.last_error = ("BLE connection timed out. Power-cycle the ESP32 (press EN/RST), "
+                                   "close any other app/browser tab connected to it, then retry.")
+            elif "AccessDenied" in err_msg or "Access is denied" in err_msg:
                 self.last_error = "Windows AccessDenied: Please remove SENTRAX-ESP32 from Windows Bluetooth Settings (Devices), then connect via Web Bluetooth or COM Port."
             elif "not found" in err_msg.lower():
-                self.last_error = f"Device {target_address} not found. Ensure ESP32 power LED is on and advertising."
+                self.last_error = (f"Device {target_address} not found. Ensure ESP32 power LED is on and advertising "
+                                   "(it stops advertising while another app or browser tab is connected).")
             else:
                 self.last_error = f"BLE connection error: {err_msg}"
             logger.error("Failed to connect to BLE device %s: %s", target_address, err_msg)
             self.is_connected = False
+            await self._close_client()
             return False
 
     async def disconnect(self):
@@ -168,9 +244,8 @@ class LiveBLEManager:
         if self._reconnect_task and not self._reconnect_task.done():
             self._reconnect_task.cancel()
             self._reconnect_task = None
-        if self.client and self.client.is_connected:
-            await self.client.disconnect()
         self.is_connected = False
+        await self._close_client()
         self.is_esp8266_connected = False
         self._rx_buffer = ""
         self.latest_live_telemetry = None
@@ -190,6 +265,9 @@ class LiveBLEManager:
             return False
 
     def _on_disconnected(self, client):
+        if client is not self.client or not self.is_connected:
+            # A client we closed on purpose, or a failure mid-handshake that connect() is already handling
+            return
         logger.warning("Physical ESP32 BLE peripheral disconnected!")
         self.is_connected = False
         self.is_esp8266_connected = False
@@ -240,7 +318,10 @@ class LiveBLEManager:
             await asyncio.sleep(4.0)
             if self.is_connected or not self.auto_reconnect:
                 break
-            success = await self.connect(self.connected_device_address)
+            async with self._connect_lock:
+                if self.is_connected or not self.auto_reconnect:
+                    break
+                success = await self._connect_locked(self.connected_device_address)
             if success:
                 break
         if not self.is_connected:
@@ -248,6 +329,8 @@ class LiveBLEManager:
 
     def _on_telemetry_packet(self, sender: int, data: bytearray):
         """Processes real-time binary or JSON telemetry payload emitted by ESP32 with streaming chunk reassembly."""
+        if not self.is_connected:
+            return  # still handshaking; connect() resets the buffer once the link is live
         try:
             chunk = data.decode("utf-8", errors="ignore")
             self._rx_buffer += chunk
@@ -276,10 +359,12 @@ class LiveBLEManager:
     def _handle_parsed_telemetry(self, parsed: dict):
         try:
             now = time.time()
-            ir_list = parsed.get("ir", [0, 0, 0, 0])
+            ir_list = read_ir(parsed.get("ir"), bool(parsed.get("irfix", 0)))
             ir_bools = [bool(x) for x in ir_list]
 
             alert_str = parsed.get("alert", "NORMAL")
+            sound_on, collision_on = sound_filter.observe(
+                parsed.get("sound", 0), alert_str, bool(parsed.get("sndfix", 0)), now)
             cond = RoadCondition.WET if (alert_str == "WET_ROAD" or parsed.get("moist", 3000) < 2000) else RoadCondition.DRY
             traf = TrafficLevel.CONGESTED if (alert_str == "CONGESTION" or sum(ir_list) >= 2) else TrafficLevel.LIGHT
 
@@ -308,7 +393,7 @@ class LiveBLEManager:
                 traffic_count=sum(ir_list),
                 traffic_level=traf,
                 road_condition=cond,
-                collision=(alert_str == "COLLISION" or bool(parsed.get("sound", 0))),
+                collision=collision_on,
                 wrong_way=(alert_str == "WRONG_WAY"),
                 stalled_vehicle=(alert_str == "STALLED"),
                 emergency_vehicle=(alert_str == "EMERGENCY" or bool(parsed.get("rfid", 0))),
@@ -316,7 +401,7 @@ class LiveBLEManager:
                 humidity_pct=float(parsed.get("hum", 55.0)),
                 moisture_raw=int(parsed.get("moist", 3100)),
                 ir_sensors=ir_bools,
-                sound_active=bool(parsed.get("sound", 0)),
+                sound_active=sound_on,
                 rfid_active=bool(parsed.get("rfid", 0)),
                 night_mode=bool(parsed.get("night", 0)),
                 source=DeviceSource.ESP32,
@@ -388,6 +473,10 @@ class LiveBLEManager:
         try:
             event_name = data.decode("utf-8").strip()
             logger.info("Received live hardware event over BLE: %s", event_name)
+
+            if event_name == "COLLISION" and not sound_filter.collision_allowed():
+                logger.info("Ignoring COLLISION event from mic noise (no sustained sound)")
+                return
 
             sev = EventSeverity.INFO
             if event_name in ("COLLISION", "WRONG_WAY"):

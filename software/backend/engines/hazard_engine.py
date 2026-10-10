@@ -69,7 +69,6 @@ class HazardEngine:
             "COLLISION": (HazardType.COLLISION, "Accident Zone Ahead", HazardSeverity.CRITICAL, 60.0),
             "WRONG_WAY": (HazardType.WRONG_WAY_VEHICLE, "Wrong-Way Vehicle Reported", HazardSeverity.CRITICAL, 80.0),
             "STALLED": (HazardType.STALLED_VEHICLE, "Stationary Vehicle Hazard", HazardSeverity.MEDIUM, 40.0),
-            "POTHOLE": (HazardType.POTHOLE, "Severe Pothole Cluster", HazardSeverity.HIGH, 25.0),
             "ANIMAL": (HazardType.ANIMAL, "Animal Crossing Observed", HazardSeverity.MEDIUM, 40.0),
             "WET_ROAD": (HazardType.WET_ROAD, "Slippery Road Surface", HazardSeverity.LOW, 100.0),
         }

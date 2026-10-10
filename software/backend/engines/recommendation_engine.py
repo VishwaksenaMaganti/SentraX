@@ -21,7 +21,7 @@ class RecommendationEngine:
           Priority 1: Wet Road -> 40 km/h
           Priority 2: High Temp -> 35 km/h
           Priority 3: Congestion -> 60 km/h
-          Priority 4: Severe Hazard/Potholes/Stalled -> 30-50 km/h
+          Priority 4: Severe Hazard/Stalled -> 30-50 km/h
           Priority 5: Normal -> 80 km/h (or posted limit)
         """
         reasons = []
@@ -53,11 +53,16 @@ class RecommendationEngine:
             rec_speed = min(rec_speed, 60.0)
             reasons.append("High traffic congestion - advisory speed 60 km/h")
 
-        # 5. Potholes ahead
-        if telemetry.cv_pothole_count > 0:
-            pothole_speed = max(30.0, 50.0 - (telemetry.cv_pothole_count * 10))
-            rec_speed = min(rec_speed, pothole_speed)
-            reasons.append(f"Road surface potholes detected ({telemetry.cv_pothole_count}) - reduce speed")
+        # 6. High Risk Score Ceiling
+        if telemetry.risk_score >= 80:
+            rec_speed = min(rec_speed, 20.0)
+            reasons.append(f"Critical risk level ({telemetry.risk_score}/100) - crawl speed advisory 20 km/h")
+        elif telemetry.risk_score >= 60:
+            rec_speed = min(rec_speed, 40.0)
+            reasons.append(f"High risk level ({telemetry.risk_score}/100) - advisory 40 km/h")
+        elif telemetry.risk_score >= 40:
+            rec_speed = min(rec_speed, 60.0)
+            reasons.append(f"Moderate risk level ({telemetry.risk_score}/100) - advisory 60 km/h")
 
         if not reasons:
             reasons.append("Clear roadway and optimal weather - normal advisory 80 km/h")
@@ -74,8 +79,7 @@ class RecommendationEngine:
     def get_vehicle_recommendation(
         trip_distance_km: float,
         traffic_level: TrafficLevel,
-        road_condition: RoadCondition,
-        potholes_count: int = 0
+        road_condition: RoadCondition
     ) -> VehicleTypeRecommendation:
         """
         Suggests optimal multimodal transit mode based on trip length, weather, and congestion.

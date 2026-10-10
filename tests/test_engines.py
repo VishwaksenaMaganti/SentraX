@@ -78,16 +78,16 @@ def test_road_risk_score_calculation():
 
 def test_road_health_bands():
     # 1. Good band (85-100)
-    score, band, color, _ = RoadHealthEngine.evaluate_segment_health(potholes=0, collision_history=0)
+    score, band, color, _ = RoadHealthEngine.evaluate_segment_health(collision_history=0)
     assert band == "GOOD"
     assert score >= 85
 
     # 2. Moderate band (65-84)
-    score_mod, band_mod, _, _ = RoadHealthEngine.evaluate_segment_health(potholes=1, collision_history=0, base_score=85)
+    score_mod, band_mod, _, _ = RoadHealthEngine.evaluate_segment_health(collision_history=0, is_wet=True, base_score=85)
     assert band_mod == "MODERATE"
 
     # 3. Critical band (0-39)
-    score_crit, band_crit, _, _ = RoadHealthEngine.evaluate_segment_health(potholes=3, collision_history=2, is_wet=True, wrong_way_events=1, base_score=80)
+    score_crit, band_crit, _, _ = RoadHealthEngine.evaluate_segment_health(collision_history=2, is_wet=True, wrong_way_events=1, stalled_events=1, base_score=80)
     assert band_crit == "CRITICAL"
     assert score_crit < 40
 

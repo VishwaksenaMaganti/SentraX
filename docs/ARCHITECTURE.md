@@ -58,7 +58,7 @@ SENSE  ──►  UNDERSTAND  ──►  DECIDE  ──►  RESPOND  ──►  
                  │ - 12 Interactive Panels        │
                  │ - Color-Coded Route Health     │
                  │ - Live Vision MJPEG Stream     │
-                 │ - Automated 9-Step Expo Demo   │
+                 │ - Automated 8-Step Expo Demo   │
                  └────────────────────────────────┘
 ```
 

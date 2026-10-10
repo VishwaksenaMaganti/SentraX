@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#1C1914">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>SentraX Drive</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+    <link rel="stylesheet" href="/static/css/sentri.css?v=20261010d">
+    <link rel="stylesheet" href="/static/mobile/mobile.css?v=20261010j">
+</head>
+<body>
+<div class="app" id="app" data-map-theme="day">
+
+    <!-- Map fills the screen -->
+    <div id="map" class="map" aria-label="Road map"></div>
+
+    <!-- Route planner (top) -->
+    <section class="planner" id="planner" aria-label="Route">
+        <div class="planner-row">
+            <button class="icon-btn" id="btn-menu" type="button" aria-label="Open menu" data-icon="menu"></button>
+            <div class="planner-fields">
+                <button class="field" id="field-origin" type="button">
+                    <span class="field-dot field-dot-origin" aria-hidden="true"></span>
+                    <span class="field-text" id="origin-name">Woxsen North Roundabout</span>
+                </button>
+                <button class="field" id="field-dest" type="button">
+                    <span class="field-dot field-dot-dest" aria-hidden="true" data-icon="pin"></span>
+                    <span class="field-text" id="dest-name">Woxsen Hostels &amp; Blue Embers</span>
+                </button>
+            </div>
+            <button class="icon-btn" id="btn-swap" type="button" aria-label="Swap start and destination" data-icon="swap"></button>
+        </div>
+        <div class="modes" role="tablist" aria-label="Travel mode">
+            <button class="mode is-active" type="button" data-mode="drive"><span data-icon="car"></span><span class="mode-eta" id="eta-drive">--</span></button>
+            <button class="mode" type="button" data-mode="bike"><span data-icon="bike"></span><span class="mode-eta" id="eta-bike">--</span></button>
+            <button class="mode" type="button" data-mode="walk"><span data-icon="walk"></span><span class="mode-eta" id="eta-walk">--</span></button>
+        </div>
+    </section>
+
+    <div class="demo-pill" id="demo-pill" hidden>
+        <button type="button" class="demo-pill-main" id="demo-pill-open"><span class="demo-pill-tag">DEMO</span><span id="demo-pill-text">Test conditions</span></button>
+        <button type="button" class="demo-pill-x" id="demo-pill-clear" aria-label="Clear demo filters" data-icon="close"></button>
+    </div>
+    <div class="tap-hint" id="tap-hint" role="button" hidden>Tap the map to set your <b id="tap-hint-what">start</b><span class="tap-hint-x" data-icon="close" aria-label="Cancel"></span></div>
+
+    <!-- Right rail: features, then map controls -->
+    <nav class="rail" aria-label="Features">
+        <div class="rail-group">
+            <button class="rail-btn" type="button" data-sheet="sensors" aria-label="Road sensors"><span data-icon="gauge"></span></button>
+            <button class="rail-btn" type="button" data-sheet="camera" aria-label="Camera AI"><span data-icon="camera"></span></button>
+            <button class="rail-btn" type="button" data-sheet="alerts" aria-label="Alert history"><span data-icon="bell"></span><span class="rail-badge" id="rail-alert-badge" hidden>0</span></button>
+            <button class="rail-btn" type="button" data-sheet="link" aria-label="Hardware link"><span data-icon="link"></span><span class="rail-dot" id="rail-link-dot"></span></button>
+            <button class="rail-btn" type="button" data-sheet="speed" aria-label="Speed limiter"><span data-icon="speed"></span></button>
+            <button class="rail-btn" type="button" data-sheet="lab" aria-label="Test lab"><span data-icon="flask"></span><span class="rail-dot rail-dot-demo" id="rail-demo-dot" hidden></span></button>
+            <button class="rail-btn" type="button" data-sheet="twin" aria-label="Aerial digital twin"><span data-icon="cube"></span></button>
+            <button class="rail-btn" type="button" data-sheet="sentri" aria-label="Sentri settings"><span data-icon="smile"></span></button>
+        </div>
+        <div class="rail-group">
+            <button class="rail-btn" type="button" id="btn-layers" aria-label="Map layers"><span data-icon="layers"></span></button>
+            <button class="rail-btn" type="button" id="btn-zoom-in" aria-label="Zoom in"><span data-icon="plus"></span></button>
+            <button class="rail-btn" type="button" id="btn-zoom-out" aria-label="Zoom out"><span data-icon="minus"></span></button>
+            <button class="rail-btn" type="button" id="btn-recenter" aria-label="Show whole route"><span data-icon="route"></span></button>
+            <button class="rail-btn rail-btn-accent" type="button" id="btn-locate" aria-label="My location"><span data-icon="locate"></span></button>
+        </div>
+    </nav>
+
+    <!-- Layers popover -->
+    <div class="popover" id="layers-pop" hidden>
+        <div class="pop-title">Map type</div>
+        <div class="seg" id="map-type-seg">
+            <button type="button" data-type="default" class="is-active">Default</button>
+            <button type="button" data-type="satellite">Satellite</button>
+            <button type="button" data-type="terrain">Terrain</button>
+        </div>
+        <div class="pop-title">Light</div>
+        <div class="seg" id="map-theme-seg">
+            <button type="button" data-theme="auto" class="is-active">Auto</button>
+            <button type="button" data-theme="day">Day</button>
+            <button type="button" data-theme="night">Night</button>
+        </div>
+        <label class="row-toggle"><span>Live traffic</span><input type="checkbox" id="layer-traffic" checked><span class="switch"></span></label>
+        <label class="row-toggle"><span>Hazards</span><input type="checkbox" id="layer-hazards" checked><span class="switch"></span></label>
+        <label class="row-toggle"><span>Road health colours</span><input type="checkbox" id="layer-health" checked><span class="switch"></span></label>
+    </div>
+
+    <!-- Sentri: minimised chat head. On an alert she moves into the alert bar and peeks out of its circle -->
+    <div class="sentri-head" id="sentri-head" role="button" tabindex="0" aria-label="Sentri">
+        <div class="sentri-head-crop" id="sentri-mini"></div>
+        <span class="sentri-head-dot" id="sentri-head-dot"></span>
+    </div>
+
+    <!-- Bottom stack -->
+    <section class="dock" id="dock">
+        <button class="alert-strip" id="alert-strip" type="button" data-sev="none" aria-label="Live road alerts">
+            <span class="alert-strip-icon" data-icon="bell"></span>
+            <span class="strip-peek" aria-hidden="true"><span class="strip-peek-clip"><span class="strip-peek-crop" id="sentri-big"></span></span></span>
+            <span class="alert-strip-text" aria-live="polite">
+                <span class="alert-strip-title" id="alert-title">No alerts on your route</span>
+                <span class="alert-strip-sub" id="alert-sub">Sentri is watching the corridor</span>
+            </span>
+            <span class="alert-strip-count" id="alert-count" hidden>0</span>
+            <span class="alert-strip-chev" data-icon="chevron"></span>
+        </button>
+
+        <div class="trip">
+            <div class="trip-route">
+                <div class="trip-main">
+                    <div class="trip-eta"><span id="trip-time">--</span> <span class="trip-dist" id="trip-dist"></span></div>
+                    <div class="trip-via" id="trip-via">Planning route...</div>
+                </div>
+                <div class="health" id="health" title="Road health">
+                    <svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" class="health-track"/><circle cx="18" cy="18" r="15" class="health-ring" id="health-ring"/></svg>
+                    <span id="health-val">--</span>
+                </div>
+                <button class="start-btn" id="btn-start" type="button"><span data-icon="nav"></span><span id="start-label">Start</span></button>
+            </div>
+            <div class="trip-speed">
+                <div class="limit-sign" title="Advisory speed limit"><span class="limit-cap">LIMIT</span><span id="limit-val">--</span></div>
+                <div class="your-speed"><span class="your-speed-val" id="speed-val">0</span><span class="your-speed-unit">km/h</span></div>
+                <div class="limiter" id="limiter">
+                    <button type="button" class="lim-chip" data-lim="20">20</button>
+                    <button type="button" class="lim-chip" data-lim="40">40</button>
+                    <button type="button" class="lim-chip" data-lim="60">60</button>
+                    <label class="switch-wrap" aria-label="Speed limiter on the ESP32"><input type="checkbox" id="limiter-on"><span class="switch"></span></label>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Side drawer (menu) -->
+    <div class="scrim" id="scrim" hidden></div>
+    <aside class="drawer" id="drawer" aria-label="Menu" aria-hidden="true">
+        <div class="drawer-head">
+            <div class="drawer-brand">SentraX <b>Drive</b></div>
+            <div class="drawer-status"><span class="status-dot" id="drawer-dot"></span><span id="drawer-status">Connecting to SentraX server...</span></div>
+        </div>
+        <nav class="drawer-list">
+            <button type="button" data-sheet="sensors"><span data-icon="gauge"></span>Road sensors</button>
+            <button type="button" data-sheet="camera"><span data-icon="camera"></span>Camera AI</button>
+            <button type="button" data-sheet="alerts"><span data-icon="bell"></span>Alert history</button>
+            <button type="button" data-sheet="link"><span data-icon="link"></span>Hardware link</button>
+            <button type="button" data-sheet="speed"><span data-icon="speed"></span>Speed limiter</button>
+            <button type="button" data-sheet="lab"><span data-icon="flask"></span>Test lab</button>
+            <button type="button" data-sheet="twin"><span data-icon="cube"></span>Aerial digital twin</button>
+            <button type="button" data-sheet="sentri"><span data-icon="smile"></span>Sentri</button>
+            <a href="/" class="drawer-link"><span data-icon="monitor"></span>Open desktop dashboard</a>
+        </nav>
+    </aside>
+
+    <!-- Bottom sheet for features and place search -->
+    <section class="sheet" id="sheet" aria-hidden="true">
+        <div class="sheet-grip" id="sheet-grip"><span></span></div>
+        <header class="sheet-head">
+            <h2 id="sheet-title">Sheet</h2>
+            <button class="icon-btn icon-btn-sm" type="button" id="sheet-close" aria-label="Close" data-icon="close"></button>
+        </header>
+        <div class="sheet-body" id="sheet-body"></div>
+    </section>
+
+    <div class="toast" id="toast" role="status" hidden></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Vector base map (OpenFreeMap): crisp roads, labels and places worldwide, no API key -->
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
+<script src="/static/js/sentri.js?v=20261010d"></script>
+<script src="/static/mobile/mobile.js?v=20261010j"></script>
+</body>
+</html>
