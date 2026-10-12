@@ -30,7 +30,8 @@ from software.backend.engines.recommendation_engine import RecommendationEngine
 from software.backend.engines.road_health_engine import RoadHealthEngine
 from software.backend.engines.emergency_tracker import emergency_tracker
 from software.backend.engines.speed_tracker import speed_tracker
-from software.backend.core.sensors import read_ir, sound_filter
+from software.backend.core.sensors import read_ir, sound_filter, hw_decoder
+from software.backend.engines.hardware_sync import hardware_sync
 from software.backend.maps.route_service import RouteHealthService
 
 router = APIRouter()
@@ -50,6 +51,15 @@ def set_services(sim, cv, ble=None, serial=None):
     cv_pipeline_instance = cv
     live_ble_instance = ble
     live_serial_instance = serial
+
+
+async def send_to_hardware(cmd: str) -> bool:
+    """Writes one command to the ESP32 over whichever link is up (BLE first, then USB serial)."""
+    if live_ble_instance and live_ble_instance.is_connected:
+        return await live_ble_instance.send_command(cmd)
+    if live_serial_instance and live_serial_instance.is_esp32_connected:
+        return live_serial_instance.send_command(cmd)
+    return False
 
 
 @router.get("/health")
@@ -150,14 +160,20 @@ def get_hardware_status():
             esp8266_port_addr = "ESP32_LINK (Pins 4/5)"
             last_hb = live_serial_instance.last_esp8266_heartbeat
 
-    both_conn = esp32_conn
+    link = live_ble_instance.link_status() if live_ble_instance else {}
+    if esp32_transport == "SERIAL":
+        link = {"esp32": hw_decoder.diag or None}
 
     return {
         "esp32": {
             "device_id": "SENTRAX-ESP32",
             "connected": esp32_conn,
             "transport": esp32_transport,
-            "port_or_address": esp32_port_addr
+            "port_or_address": esp32_port_addr,
+            "firmware": hw_decoder.firmware if esp32_conn else None,
+            "led_right": hw_decoder.led_right if esp32_conn else None,
+            "led_swap": hw_decoder.led_swap,
+            "link": link
         },
         "esp8266": {
             "device_id": "SENTRAX-ESP8266",
@@ -293,13 +309,7 @@ async def set_speed_limit(
 ):
     """Mobile speed limiter: sets the ESP32's advisory limit, or releases it back to 80 km/h."""
     target = max(10.0, min(120.0, float(limit))) if enabled else 80.0
-    cmd = f"LIMIT:{target:.0f}"
-    sent = False
-    if live_ble_instance and live_ble_instance.is_connected:
-        sent = await live_ble_instance.send_command(cmd)
-    elif live_serial_instance and live_serial_instance.is_esp32_connected:
-        live_serial_instance.send_command(cmd)
-        sent = True
+    sent = await send_to_hardware(f"LIMIT:{target:.0f}")
     return {"status": "limit_set" if enabled else "limit_released", "limit": target, "sent_to_hardware": sent}
 
 
@@ -308,12 +318,7 @@ async def override_speed(speed: float = Body(..., embed=True)):
     """Manually sets vehicle speed, commands physical hardware, and updates risk/advisory."""
     global is_live_hardware_mode
     is_live_hardware_mode = True
-    cmd = f"SPEED:{speed:.1f}"
-
-    if live_ble_instance and live_ble_instance.is_connected:
-        await live_ble_instance.send_command(cmd)
-    elif live_serial_instance and live_serial_instance.is_esp32_connected:
-        live_serial_instance.send_command(cmd)
+    await send_to_hardware(f"SPEED:{speed:.1f}")
 
     t = simulator_instance.telemetry if simulator_instance else CanonicalTelemetry()
     speed_tracker.record(float(speed))
@@ -352,11 +357,7 @@ async def trigger_manual_alert(
     cmd = f"ALERT:{alert_upper}"
     if alert_upper == "STALLED" and sensor_index is not None:
         cmd = f"ALERT:STALLED:{sensor_index}"
-
-    if live_ble_instance and live_ble_instance.is_connected:
-        await live_ble_instance.send_command(cmd)
-    elif live_serial_instance and live_serial_instance.is_esp32_connected:
-        live_serial_instance.send_command(cmd)
+    await send_to_hardware(cmd)
 
     t = simulator_instance.telemetry if simulator_instance else CanonicalTelemetry()
     t.timestamp = time.time()
@@ -448,8 +449,57 @@ async def reset_demo():
     """Resets every demo mode applied from the Aerial Digital Twin console: clears manual alerts on
     the ESP32 (LEDs and E-Ink back to normal), the emergency window and the test vehicle speed."""
     speed_tracker.clear()
+    hardware_sync.forget_lab()  # ALERT:NORMAL below clears what the Test lab pushed
     result = await trigger_manual_alert(alert="NORMAL", sensor_index=None)
     return {"status": "demo_reset", "risk_score": result["risk_score"], "recommended": result["recommended"]}
+
+
+@router.post("/hardware/push")
+async def push_alerts_to_hardware(
+    alerts: Optional[List[str]] = Body(None, embed=True),
+    speed: Optional[float] = Body(None, embed=True)
+):
+    """Test lab conditions changed: show the same alerts (and test speed) on the LEDs and E-Ink sign."""
+    sent = await hardware_sync.push_lab(alerts or [], speed)
+    return {"sent_to_hardware": sent, "alerts": hardware_sync.lab_alerts}
+
+
+@router.post("/hardware/led")
+async def align_led_strips(
+    right: Optional[int] = Body(None, embed=True),
+    swap: Optional[bool] = Body(None, embed=True),
+    preview_ir: Optional[int] = Body(None, embed=True)
+):
+    """Lines up the right LED strip with the left one: shows the stalled marker beside an IR
+    sensor for 10 s, and moves the right-side marker (saved on the ESP32)."""
+    if hw_decoder.led_right is None and (right is not None or swap is not None):
+        raise HTTPException(status_code=409, detail="Flash the new ESP32 firmware first (it adds strip alignment).")
+    sent = True
+    if right is not None:
+        sent = await send_to_hardware(f"LED:RIGHT:{max(0, min(59, int(right)))}") and sent
+        hw_decoder.led_right = max(0, min(59, int(right)))
+    if swap is not None:
+        sent = await send_to_hardware(f"LED:SWAP:{1 if swap else 0}") and sent
+        hw_decoder.led_swap = bool(swap)
+    if preview_ir is not None:
+        sent = await send_to_hardware(f"LED:PREVIEW:{max(1, min(4, int(preview_ir)))}") and sent
+    if not sent:
+        raise HTTPException(status_code=502, detail="Could not reach the ESP32. Link it first.")
+    return {"status": "ok", "led_right": hw_decoder.led_right, "led_swap": hw_decoder.led_swap}
+
+
+@router.post("/hardware/calibrate")
+async def calibrate_hardware():
+    """Asks the ESP32 to learn this room: idle IR levels, empty-road ultrasonic distances, dry
+    moisture, room temperature/humidity and mic noise. Keep the road clear for ~6 s."""
+    if not (live_ble_instance and live_ble_instance.is_connected) and not (
+            live_serial_instance and live_serial_instance.is_esp32_connected):
+        raise HTTPException(status_code=409, detail="Link the ESP32 first.")
+    if hw_decoder.firmware is None:
+        raise HTTPException(status_code=409, detail="This ESP32 runs older firmware without calibration. Flash the new SentraX firmware first.")
+    if not await send_to_hardware("CAL"):
+        raise HTTPException(status_code=502, detail="Could not reach the ESP32.")
+    return {"status": "calibrating", "seconds": 6}
 
 
 # =====================================================================

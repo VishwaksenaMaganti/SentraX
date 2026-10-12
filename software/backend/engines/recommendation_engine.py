@@ -44,7 +44,7 @@ class RecommendationEngine:
             reasons.append("Wet road surface detected - wet traction recommendation 40 km/h")
 
         # 3. High Temperature (ESP32: 35 km/h)
-        if telemetry.road_condition == RoadCondition.HIGH_TEMP or telemetry.temperature_c >= 30.0:
+        if telemetry.is_hot():
             rec_speed = min(rec_speed, 35.0)
             reasons.append("Elevated surface temperature - tire blowout mitigation 35 km/h")
 
@@ -53,8 +53,11 @@ class RecommendationEngine:
             rec_speed = min(rec_speed, 60.0)
             reasons.append("High traffic congestion - advisory speed 60 km/h")
 
-        # 6. High Risk Score Ceiling
-        if telemetry.risk_score >= 80:
+        # 6. High Risk Score Ceiling. Skipped for live hardware data: the rules above match the
+        # ESP32's own table, so the app's advisory equals the speed on the E-Ink sign.
+        if telemetry.alerts_decided:
+            pass
+        elif telemetry.risk_score >= 80:
             rec_speed = min(rec_speed, 20.0)
             reasons.append(f"Critical risk level ({telemetry.risk_score}/100) - crawl speed advisory 20 km/h")
         elif telemetry.risk_score >= 60:

@@ -417,7 +417,7 @@ class SensorCameraFusionEngine:
         # 6. WET ROAD SURFACE FUSION (Test 12 & Section 44)
         # =====================================================================
         # Camera CANNOT directly measure physical moisture; it remains sensor-authoritative!
-        if fused.road_condition == RoadCondition.WET or (fused.moisture_raw > 0 and fused.moisture_raw < 2000):
+        if fused.is_wet():
             fe = FusedEvent(
                 event_type=EventType.WET_ROAD,
                 timestamp=now,
@@ -602,7 +602,7 @@ class SensorCameraFusionEngine:
         })
 
         # 5. Wet Road
-        s_wet = "YES" if (telemetry.road_condition == RoadCondition.WET or (0 < telemetry.moisture_raw < 2000)) else "NO"
+        s_wet = "YES" if telemetry.is_wet() else "NO"
         rows.append({
             "event": "Wet Road",
             "sensor": s_wet,

@@ -84,7 +84,7 @@ class RoadRiskEngine:
 
         # Factor E: Wet Road (0-100)
         f_wet = 0.0
-        if telemetry.road_condition == RoadCondition.WET or (0 < telemetry.moisture_raw < 2000):
+        if telemetry.is_wet():
             f_wet = 80.0
             reasons.append("Wet road surface / reduced traction (Factor: 80)")
 
@@ -95,10 +95,10 @@ class RoadRiskEngine:
 
         # Factor G: Environment (0-100)
         f_env = 0.0
-        if telemetry.temperature_c >= 30.0:
+        if telemetry.is_hot():
             f_env += 50.0
             reasons.append(f"Elevated road temperature {telemetry.temperature_c:.1f}°C")
-        if telemetry.humidity_pct >= 80.0:
+        if telemetry.is_humid():
             f_env += 40.0
             reasons.append(f"High relative humidity {telemetry.humidity_pct:.0f}%")
         f_env = min(100.0, f_env)

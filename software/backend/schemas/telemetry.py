@@ -104,3 +104,26 @@ class CanonicalTelemetry(BaseModel):
     esp8266_connected: bool = False
     both_modules_connected: bool = False
     hardware_standby: bool = True
+
+    # Hardware alert decisions. When alerts_decided is set (live ESP32 data), the flags below and
+    # road_condition are authoritative, so the app follows the road sign instead of re-deriving
+    # alerts from raw readings with its own thresholds.
+    alerts_decided: bool = False
+    heat_alert: bool = False
+    humid_alert: bool = False
+    overspeed_alert: bool = False
+    hw_alerts: List[str] = Field(default_factory=list)      # every alert the ESP32 is showing
+    pushed_alerts: List[str] = Field(default_factory=list)  # ...of which the app/camera pushed
+
+    def is_wet(self) -> bool:
+        if self.alerts_decided:
+            return self.road_condition == RoadCondition.WET
+        return self.road_condition == RoadCondition.WET or 0 < self.moisture_raw < 2000
+
+    def is_hot(self) -> bool:
+        if self.alerts_decided:
+            return self.heat_alert
+        return self.road_condition == RoadCondition.HIGH_TEMP or self.temperature_c >= 30.0
+
+    def is_humid(self) -> bool:
+        return self.humid_alert if self.alerts_decided else self.humidity_pct >= 80.0

@@ -25,11 +25,10 @@ from software.backend.schemas.telemetry import (
 from software.backend.schemas.events import CanonicalEvent, EventType, EventSeverity
 from software.backend.serial_comm.protocol_adapter import SentraXProtocolAdapter
 from software.backend.database.models import save_telemetry, save_event, update_device_status
-from software.backend.engines.risk_engine import RoadRiskEngine
-from software.backend.engines.recommendation_engine import RecommendationEngine
 from software.backend.engines.emergency_tracker import emergency_tracker
 from software.backend.engines.speed_tracker import speed_tracker
-from software.backend.core.sensors import read_ir, sound_filter
+from software.backend.core.sensors import hw_decoder
+from software.backend.engines.hardware_sync import hardware_sync
 from software.backend.core.config import settings
 
 logger = logging.getLogger("sentrax.live_serial")
@@ -120,6 +119,8 @@ class LiveSerialManager:
             self.last_esp32_packet_time = time.time()
             emergency_tracker.reset_link()
             speed_tracker.reset_link()
+            hw_decoder.reset_link()
+            hardware_sync.link_up()
             self._esp32_stop_event.clear()
             self._esp32_thread = threading.Thread(target=self._read_esp32_loop, daemon=True)
             self._esp32_thread.start()
@@ -284,8 +285,15 @@ class LiveSerialManager:
         if line.startswith("{") and line.endswith("}"):
             try:
                 d = json.loads(line)
-                ir_list = read_ir(d.get("ir"), bool(d.get("irfix", 0)))
-                ir_bools = [bool(x) for x in ir_list]
+                if "ev" in d:
+                    # Firmware v2 also prints its event notifications on the cable
+                    name = hw_decoder.note_event(d.get("ev"), bool(d.get("on", 1)), now)
+                    if self.latest_live_telemetry and name != "CAL":
+                        self.latest_live_telemetry = hw_decoder.refresh(
+                            self.latest_live_telemetry, name, bool(d.get("on", 1)),
+                            pushed=str(d.get("src", "hw")) != "hw", now=now)
+                    hardware_sync.wake()
+                    return
 
                 # Check ESP8266 bridge flag in ESP32 payload
                 esp8266_flag = bool(d.get("esp8266", 0))
@@ -298,62 +306,13 @@ class LiveSerialManager:
                         self.esp8266_uart_bridge_active = False
                         update_device_status("SENTRAX-ESP8266", "DISCONNECTED", last_event="UART_LINK_OFFLINE")
 
-                esp8266_conn = self.is_esp8266_connected
-                both_conn = bool(self.is_esp32_connected)
-
-                alert_str = d.get("alert", "NORMAL")
-                sound_on, collision_on = sound_filter.observe(
-                    d.get("sound", 0), alert_str, bool(d.get("sndfix", 0)), now)
-                cond = RoadCondition.WET if (alert_str == "WET_ROAD" or d.get("moist", 3000) < 2000) else RoadCondition.DRY
-                traf = TrafficLevel.CONGESTED if (alert_str == "CONGESTION" or sum(ir_list) >= 2) else TrafficLevel.LIGHT
-
-                t = CanonicalTelemetry(
-                    device_id="SENTRAX-ESP32",
-                    timestamp=now,
-                    connection_state=ConnectionState.CONNECTED if both_conn else ConnectionState.DISCONNECTED,
-                    measured_speed_kmh=float(d.get("speed", d.get("spd", 0.0))),
-                    recommended_speed_kmh=float(d.get("rec_speed", d.get("rec", 80.0))),
-                    posted_speed_kmh=80.0,
-                    traffic_count=sum(ir_list),
-                    traffic_level=traf,
-                    road_condition=cond,
-                    collision=collision_on,
-                    wrong_way=(alert_str == "WRONG_WAY"),
-                    stalled_vehicle=(alert_str == "STALLED"),
-                    emergency_vehicle=(alert_str == "EMERGENCY" or bool(d.get("rfid", 0))),
-                    temperature_c=float(d.get("temp", 26.5)),
-                    humidity_pct=float(d.get("hum", 55.0)),
-                    moisture_raw=int(d.get("moist", 3100)),
-                    ir_sensors=ir_bools,
-                    sound_active=sound_on,
-                    rfid_active=bool(d.get("rfid", 0)),
-                    night_mode=bool(d.get("night", 0)),
-                    source=DeviceSource.ESP32,
-                    is_simulated=False,
-                    esp32_connected=True,
-                    esp8266_connected=esp8266_conn,
-                    both_modules_connected=both_conn,
-                    hardware_standby=not both_conn
-                )
-
-                # The firmware's rfid flag stays latched after a scan; read it as an edge, not a level
-                emergency_tracker.observe_packet(bool(d.get("rfid", 0)), alert_str, now)
-                emergency_tracker.apply(t)
-                # The firmware's speed also stays latched; show each new reading for a few seconds
-                speed_tracker.observe_packet(t.measured_speed_kmh, now)
-                speed_tracker.apply(t)
-
-                if both_conn:
-                    score, reasons = RoadRiskEngine.calculate_risk(t)
-                    t.risk_score = score
-                    t.risk_reasons = reasons
-                    rec = RecommendationEngine.get_recommended_speed(t, t.posted_speed_kmh)
-                    t.recommended_speed_kmh = rec.recommended_speed_kmh
-                    self.latest_live_telemetry = t
+                if self.is_esp32_connected:
+                    t = hw_decoder.decode(d, now)
+                    t.esp8266_connected = self.is_esp8266_connected
+                    self.latest_live_telemetry = hw_decoder.score(t)
                     save_telemetry(t)
-                    update_device_status("SENTRAX-ESP32", "CONNECTED", last_event=alert_str)
-                    if self.on_telemetry_broadcast:
-                        self._dispatch_async_broadcast(t, None)
+                    update_device_status("SENTRAX-ESP32", "CONNECTED", last_event=t.hw_alerts[0] if t.hw_alerts else "NORMAL")
+                    self._dispatch_async_broadcast(t, None)
                 else:
                     self.latest_live_telemetry = None
                     self._update_and_broadcast_standby_state()
@@ -432,9 +391,9 @@ class LiveSerialManager:
                     self._dispatch_async_broadcast(self.latest_live_telemetry, None)
 
     def _dispatch_async_broadcast(self, t, evt):
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.run_coroutine_threadsafe(self.on_telemetry_broadcast(t, evt), loop)
-        except Exception:
-            pass
+        """Hands the update to the perception loop, which fuses and broadcasts it (one stream).
+        Safe from the serial reader threads."""
+        if evt is not None:
+            hardware_sync.post_event(evt)
+        else:
+            hardware_sync.wake()

@@ -65,6 +65,12 @@ BYTETRACK_ARGS = dict(track_high_thresh=0.20, track_low_thresh=0.08, new_track_t
                       track_buffer=30, match_thresh=0.8, fuse_score=True)
 # Boxes from the two models that overlap this much are the same vehicle
 MERGE_IOU = 0.45
+# An "ambulance" / "police car" label below this score is too unsure to call (YOLOE can call a
+# parked yellow toy car "ambulance" at ~0.4); such a box counts as a plain car
+EMERGENCY_MIN_CONF = 0.5
+# Buffered IoU (C-BIoU, Yang et al. 2023): boxes grow by this fraction of their size on every side
+# before matching, so toy cars that move most of a body length per frame keep their track
+BIOU_BUFFER = 0.5
 
 
 class _Detector:
@@ -89,6 +95,37 @@ def _overlap(a: List[float], b: List[float]) -> float:
     return 1.0 if inside >= 0.85 else iou
 
 
+def buffered_iou(a: np.ndarray, b: np.ndarray, buffer: float = BIOU_BUFFER) -> np.ndarray:
+    """IoU matrix of xyxy boxes after growing each box by `buffer` x its width/height on every side."""
+    def grow(x):
+        w, h = x[:, 2] - x[:, 0], x[:, 3] - x[:, 1]
+        return np.stack([x[:, 0] - buffer * w, x[:, 1] - buffer * h, x[:, 2] + buffer * w, x[:, 3] + buffer * h], 1)
+    a, b = grow(np.asarray(a, dtype=np.float64)), grow(np.asarray(b, dtype=np.float64))
+    ix = np.clip(np.minimum(a[:, None, 2], b[None, :, 2]) - np.maximum(a[:, None, 0], b[None, :, 0]), 0, None)
+    iy = np.clip(np.minimum(a[:, None, 3], b[None, :, 3]) - np.maximum(a[:, None, 1], b[None, :, 1]), 0, None)
+    inter = ix * iy
+    area_a = (a[:, 2] - a[:, 0]) * (a[:, 3] - a[:, 1])
+    area_b = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+    return inter / np.maximum(area_a[:, None] + area_b[None, :] - inter, 1e-9)
+
+
+def _buffered_iou_tracker_class():
+    """ByteTrack with Buffered IoU matching (built lazily so importing this module needs no ultralytics)."""
+    from ultralytics.trackers.byte_tracker import BYTETracker
+    from ultralytics.trackers.utils import matching
+
+    class BufferedIoUByteTracker(BYTETracker):
+        def get_dists(self, tracks, detections):
+            if not tracks or not detections:
+                return np.zeros((len(tracks), len(detections)), dtype=np.float32)
+            dists = 1.0 - buffered_iou([t.xyxy for t in tracks], [d.xyxy for d in detections])
+            if self.args.fuse_score:
+                dists = matching.fuse_score(dists, detections)
+            return dists
+
+    return BufferedIoUByteTracker
+
+
 def merge_detections(dets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Joins overlapping boxes from several models into one per vehicle (highest score wins the box).
     An emergency label from either model wins over a plain one; otherwise the more specific label stays."""
@@ -96,9 +133,12 @@ def merge_detections(dets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     for d in sorted(dets, key=lambda d: -d["conf"]):
         match = next((k for k in kept if _overlap(k["xyxy"], d["xyxy"]) >= MERGE_IOU), None)
         if match is None:
-            kept.append(dict(d))
+            d = dict(d)
+            if d["class"] == "EMERGENCY_VEHICLE" and d["conf"] < EMERGENCY_MIN_CONF:
+                d.update({"class": "CAR", "subclass": None})  # unsure emergency label: plain car
+            kept.append(d)
             continue
-        if d["class"] == "EMERGENCY_VEHICLE" and match["class"] != "EMERGENCY_VEHICLE" and d["conf"] >= 0.25:
+        if d["class"] == "EMERGENCY_VEHICLE" and match["class"] != "EMERGENCY_VEHICLE" and d["conf"] >= EMERGENCY_MIN_CONF:
             match.update({"class": d["class"], "subclass": d["subclass"], "label": d["label"]})
         elif match["subclass"] is None and d["subclass"] and d["class"] == match["class"]:
             match.update({"subclass": d["subclass"], "label": d["label"]})
@@ -204,8 +244,7 @@ class AIInferenceEngine:
         return True
 
     def _new_tracker(self):
-        from ultralytics.trackers.byte_tracker import BYTETracker
-        self._tracker = BYTETracker(SimpleNamespace(**BYTETRACK_ARGS))
+        self._tracker = _buffered_iou_tracker_class()(SimpleNamespace(**BYTETRACK_ARGS))
 
     def reset_tracking(self):
         """Restarts ByteTrack on the next frame (new IDs). Use after the camera source changes."""
@@ -214,8 +253,8 @@ class AIInferenceEngine:
     def _detect_merged(self, frame_bgr: np.ndarray) -> List[Dict[str, Any]]:
         raw: List[Dict[str, Any]] = []
         for det in self.detectors:
-            r = det.model.predict(frame_bgr, conf=DETECTION_CONF, classes=det.class_ids, device=self.device,
-                                  half=self.device.startswith("cuda"), verbose=False)[0]
+            r = det.model.predict(frame_bgr, conf=DETECTION_CONF, classes=det.class_ids,
+                                  device=self.device, verbose=False)[0]
             if r.boxes is None or len(r.boxes) == 0:
                 continue
             for xyxy, cid, conf in zip(r.boxes.xyxy.tolist(), r.boxes.cls.int().tolist(), r.boxes.conf.tolist()):

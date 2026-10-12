@@ -50,7 +50,7 @@ def test_merge_keeps_one_box_and_the_specific_label():
 def test_merge_emergency_label_wins():
     merged = merge_detections([
         _raw([100, 100, 300, 180], 0.9, "CAR"),
-        _raw([102, 101, 301, 181], 0.4, "EMERGENCY_VEHICLE", "POLICE", "police car"),
+        _raw([102, 101, 301, 181], 0.6, "EMERGENCY_VEHICLE", "POLICE", "police car"),
     ])
     assert merged[0]["class"] == "EMERGENCY_VEHICLE" and merged[0]["subclass"] == "POLICE"
 
@@ -182,11 +182,40 @@ def test_parked_track_not_detected_this_frame_is_ignored():
     assert out == {}
 
 
-def test_detector_label_is_enough():
+def test_detector_label_is_enough_when_it_holds():
     det = EmergencyLightDetector()
-    det.update(_scene(GREY), [_trk("AMBULANCE")], 1000.0)
-    out = det.update(_scene(GREY), [_trk("AMBULANCE")], 1000.1)
+    out = {}
+    for i in range(4):
+        out = det.update(_scene(GREY), [_trk("AMBULANCE")], 1000.0 + i * 0.1)
     assert out["CAM-001"]["type"] == "AMBULANCE"
+
+
+def test_occasional_detector_label_is_ignored():
+    det = EmergencyLightDetector()
+    out = {}
+    for i in range(10):
+        out = det.update(_scene(GREY), [_trk("AMBULANCE" if i in (3, 7) else None)], 1000.0 + i * 0.1)
+    assert out == {}
+
+
+def test_unsure_emergency_label_becomes_plain_car():
+    # Regression: YOLOE called a parked yellow toy car "ambulance" at 0.38
+    merged = merge_detections([
+        _raw([100, 100, 220, 140], 0.85, "CAR"),
+        _raw([110, 100, 220, 138], 0.38, "EMERGENCY_VEHICLE", "AMBULANCE", "ambulance"),
+    ])
+    assert merged[0]["class"] == "CAR" and merged[0]["subclass"] is None
+    alone = merge_detections([_raw([100, 100, 220, 140], 0.38, "EMERGENCY_VEHICLE", "AMBULANCE", "ambulance")])
+    assert alone[0]["class"] == "CAR"
+
+
+def test_buffered_iou_matches_fast_small_car():
+    from ai.inference.inference_engine import buffered_iou
+    import numpy as np
+    prev, now = [[0, 0, 120, 40]], [[71, 0, 191, 40]]   # moved 0.59 car lengths in one frame
+    plain_iou = 49 / (240 - 49)
+    assert plain_iou < 0.3                               # ByteTrack's plain IoU would not confirm it
+    assert buffered_iou(np.array(prev), np.array(now))[0, 0] > 0.5
 
 
 def test_is_flashing_needs_on_off_cycles():

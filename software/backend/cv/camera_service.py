@@ -358,6 +358,7 @@ class CameraService:
 
             # Synthetic frames are drawn rectangles that YOLO cannot recognise
             detections = self.detector.detect(frame, use_ai=live)
+            self.tracker.frame_size = (w, h)
             tracks = self.tracker.update(detections)
 
             # 4. Live camera only: emergency vehicles by appearance, then snapshots + speed log

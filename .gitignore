@@ -21,6 +21,7 @@ ENV/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/logs/
 *.db-journal
 *.db-wal
 *.db-shm

@@ -110,9 +110,9 @@ class EmergencyLightDetector:
         white = float(np.median([e[3] for e in hist]))
         recent = [e for e in hist if now - e[0] <= 1.0]
 
-        # 1. The detector itself recognised the vehicle type in at least 2 of the last frames
+        # 1. The detector itself recognised the vehicle type in most frames of the last second
         subs = [e[4] for e in recent if e[4]]
-        if len(subs) >= 2:
+        if len(subs) >= 3 and len(subs) >= 0.6 * len(recent):
             sub = max(set(subs), key=subs.count)
             names = {"AMBULANCE": "an ambulance", "POLICE": "a police car", "FIRE_TRUCK": "a fire engine"}
             return {"type": sub, "reason": f"Looks like {names.get(sub, 'an emergency vehicle')}", "flashing": False}

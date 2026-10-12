@@ -5,7 +5,16 @@ Computer Vision, Road Health Intelligence, Route Analytics, and Live WebSocket T
 """
 
 import asyncio
+import logging
 import os
+
+# Load torch before anything touches Bluetooth: once bleak's WinRT runtime is in the process,
+# torch's c10.dll fails to initialise (WinError 1114) and the camera AI silently falls back to
+# the colour/motion heuristic, which boxes everything in view.
+try:
+    import torch  # noqa: F401
+except Exception:
+    pass
 import time
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -27,6 +36,8 @@ from software.backend.serial_comm.live_serial_service import LiveSerialManager
 from software.backend.engines.data_fusion import DataFusionEngine
 from software.backend.engines.emergency_tracker import emergency_tracker
 from software.backend.engines.speed_tracker import speed_tracker
+from software.backend.engines.hardware_sync import hardware_sync
+from software.backend.core.sensors import hw_decoder
 
 setup_logging()
 
@@ -67,14 +78,24 @@ set_services(simulator, cv_pipeline, live_ble, live_serial)
 simulator.broadcast_callback = broadcast_telemetry_event
 
 
+logger = logging.getLogger("sentrax.main")
+
+
 async def background_perception_loop():
-    """Main background loop: Gates telemetry behind confirmed connection of both ESP32 & ESP8266."""
+    """Main background loop: Gates telemetry behind confirmed connection of both ESP32 & ESP8266.
+
+    Runs every 0.5 s, and at once whenever the hardware links deliver a packet or event
+    (hardware_sync.wake), so live telemetry reaches the app as a single fused stream.
+    """
+    last_error, last_error_at = "", 0.0
     while True:
         try:
             from software.backend.schemas.telemetry import CanonicalTelemetry, ConnectionState, RoadCondition, TrafficLevel, DeviceSource
 
             # 1. Process CV step
             cv_stats = cv_pipeline.process_step()
+            # Only a real camera feed may add hazards to live data, never the synthetic test scene
+            camera_live = bool(cv_pipeline.camera_service.is_connected)
 
             # 2. Check connection states of both microcontrollers
             esp32_conn = False
@@ -116,7 +137,7 @@ async def background_perception_loop():
                 evt = DataFusionEngine.first_fresh(new_events)
                 await broadcast_telemetry_event(fused_tele, evt)
 
-            elif current_mode == DetectionMode.FUSION and both_conn:
+            elif current_mode in (DetectionMode.FUSION, DetectionMode.SENSOR) and both_conn:
                 # FUSION MODE WITH HARDWARE CONNECTED
                 live_tele = None
                 if live_ble and live_ble.is_connected and live_ble.latest_live_telemetry:
@@ -139,13 +160,12 @@ async def background_perception_loop():
                     emergency_tracker.apply(live_tele)
                     speed_tracker.apply(live_tele)
 
-                    # A simulated camera must not stand in for the ultrasonic speed reading
                     fused_tele, new_events = DataFusionEngine.fuse_telemetry_and_cv(
-                        live_tele, cv_stats, allow_cv_speed_fallback=cv_pipeline.camera_service.is_connected
+                        live_tele, cv_stats if camera_live else {}, allow_cv_speed_fallback=camera_live
                     )
                     fused_tele.is_simulated = False
                     simulator.telemetry = fused_tele
-                    evt = DataFusionEngine.first_fresh(new_events)
+                    evt = hardware_sync.pop_event() or DataFusionEngine.first_fresh(new_events)
                     await broadcast_telemetry_event(fused_tele, evt)
                 else:
                     both_conn = False
@@ -209,16 +229,25 @@ async def background_perception_loop():
                 simulator.telemetry = standby_tele
                 await broadcast_telemetry_event(standby_tele, None)
 
-        except Exception as e:
-            pass
+            # 3. Push Test lab / camera alerts to the road sign and LEDs
+            await hardware_sync.tick(time.time(), cv_stats, camera_live, both_conn)
 
-        await asyncio.sleep(0.5)
+        except Exception as e:
+            msg = f"{type(e).__name__}: {e}"
+            if msg != last_error or time.time() - last_error_at > 30:
+                logger.warning("Perception loop error: %s", msg)
+                last_error, last_error_at = msg, time.time()
+
+        await hardware_sync.wait(0.5)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     init_db()
+    from software.backend.api.routes import send_to_hardware
+    hardware_sync.bind(send_to_hardware, lambda: hw_decoder.firmware is not None,
+                       lambda: hw_decoder.firmware is not None or hw_decoder.led_right is not None)
     cv_pipeline.start()
     await ble_gateway.initialize()
     task = asyncio.create_task(background_perception_loop())

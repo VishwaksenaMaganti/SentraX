@@ -151,7 +151,7 @@
         health: store.get('sx-layer-health', true),
         limit: store.get('sx-limit', 40)
     };
-    const DEMO_DEFAULT = { active: false, preset: null, speed: 40, alerts: [], temp: 27, night: false, lanes: [0, 0, 0, 0], hardware: false, speederSpeed: 120 };
+    const DEMO_DEFAULT = { active: false, preset: null, speed: 40, alerts: [], temp: 27, night: false, lanes: [0, 0, 0, 0], speederSpeed: 120 };
     const demo = Object.assign({}, DEMO_DEFAULT, store.get('sx-demo', {}));
     const state = {
         liveTele: null,     // from the SentraX server
@@ -876,7 +876,10 @@
         if (t.stalled_vehicle) out.push({ id: 'stall', name: 'stalled car', sev: 'warn', icon: 'cone', onRoad: true, title: 'Stalled vehicle', sub: 'Lane blocked ahead. Merge early.', mood: 'stall' });
         if (t.traffic_level === 'CONGESTED') out.push({ id: 'traffic', name: 'traffic jam', sev: 'warn', icon: 'traffic', onRoad: true, title: 'Heavy traffic', sub: `${t.traffic_count} of 4 lanes occupied ahead.`, mood: 'congestion' });
         if (t.road_condition === 'WET') out.push({ id: 'wet', name: 'wet road', sev: 'warn', icon: 'rain', onRoad: true, title: 'Wet road', sub: (rec) => `Grip is low. Hold ${rec} km/h and brake early.`, mood: 'rain' });
-        if (t.temperature_c >= 30) out.push({ id: 'heat', name: 'hot road', sev: 'info', icon: 'sun', title: 'Hot road surface', sub: `${Number(t.temperature_c).toFixed(1)} °C. Tyres soften.`, mood: 'heat' });
+        // Live hardware data carries the ESP32's own decisions; Test lab data has raw readings only
+        if (t.alerts_decided ? t.heat_alert : t.temperature_c >= 30) out.push({ id: 'heat', name: 'hot road', sev: 'info', icon: 'sun', title: 'Hot road surface', sub: `${Number(t.temperature_c).toFixed(1)} °C. Tyres soften.`, mood: 'heat' });
+        if (t.alerts_decided && t.humid_alert) out.push({ id: 'humid', name: 'humid air', sev: 'info', icon: 'drop', title: 'Humid air', sub: `${Math.round(t.humidity_pct)} % humidity. Mist risk, keep a longer gap.`, mood: 'rain' });
+        if (t.alerts_decided && t.overspeed_alert) out.push({ id: 'hwspeed', name: 'speeding car', sev: 'warn', icon: 'speed', onRoad: true, title: 'Speeding car at the station', sub: `Clocked at ${Number(t.measured_speed_kmh || 0).toFixed(1)} km/h. The sign says slow down.`, mood: 'slowdown' });
         return out;
     }
 
@@ -892,7 +895,7 @@
         while (taken.some(x => Math.abs(x - at) < 10)) at += 12;    // spread markers so they do not stack
         at = Math.min(at, total);
         state.zones.set(a.id, at);
-        if (state.travelled > at + ZONE_CLEAR_M) state.cleared.add(a.id);   // already behind you
+        if (demo.active && state.travelled > at + ZONE_CLEAR_M) state.cleared.add(a.id);   // already behind you
         return at;
     }
 
@@ -916,8 +919,12 @@
         raw.forEach(a => {
             if (a.onRoad && state.route) {
                 a.at = zoneFor(a);
-                if (!state.cleared.has(a.id) && state.travelled > a.at + ZONE_CLEAR_M) { state.cleared.add(a.id); passedNow.push(a.id); }
-                if (state.cleared.has(a.id)) return;
+                // Test lab hazards clear once you drive past them. Live sensor hazards never do:
+                // Sentri reacts for as long as the sensors keep reporting the condition.
+                if (demo.active) {
+                    if (!state.cleared.has(a.id) && state.travelled > a.at + ZONE_CLEAR_M) { state.cleared.add(a.id); passedNow.push(a.id); }
+                    if (state.cleared.has(a.id)) return;
+                }
                 a.ahead = a.at - state.travelled;
             }
             list.push(a);
@@ -1172,15 +1179,17 @@
         const names = demo.alerts.map(id => ALERTS.find(a => a.id === id)?.name).filter(Boolean);
         $('#demo-pill-text').textContent = p ? p.name : (names.length ? names.join(' + ') : `Custom · ${demo.speed} km/h`);
     }
-    async function mirrorToHardware() {
-        if (!demo.hardware) return;
-        const map_ = { collision: 'COLLISION', wrong: 'WRONG_WAY', emergency: 'EMERGENCY', stall: 'STALLED', congestion: 'CONGESTION', wet: 'WET_ROAD', heat: 'HIGH_TEMP' };
-        try {
-            await api('/speed/override', { speed: demo.speed });
-            const first = demo.alerts.find(id => map_[id]);
-            if (first) await api('/alerts/trigger', { alert: map_[first] });
-            else await api('/demo/reset', {});
-        } catch (e) { toast(`ESP32: ${e.message}`); }
+    // Test lab conditions also light the ESP32's LED strip and E-Ink sign while it is linked
+    const HW_ALERT = { collision: 'COLLISION', wrong: 'WRONG_WAY', emergency: 'EMERGENCY', stall: 'STALLED', congestion: 'CONGESTION', wet: 'WET_ROAD', heat: 'HIGH_TEMP' };
+    let mirrorTimer = null;
+    let ledIR = 1;               // IR whose marker the LED alignment controls preview
+    function mirrorToHardware() {
+        clearTimeout(mirrorTimer);
+        mirrorTimer = setTimeout(() => {
+            if (!demo.active) return;
+            const alerts = demo.alerts.map(id => HW_ALERT[id]).filter(Boolean);
+            api('/hardware/push', { alerts, speed: demo.speed }).catch(() => {});   // no server: the lab still runs in the app
+        }, 350);
     }
     function applyDemo(reason) {
         demo.active = true;
@@ -1192,13 +1201,14 @@
         else if (reason === 'preset') setPop(true, 3500, { sev: 'good', icon: 'smile', title: 'Road is clear', sub: state.tele.night_mode ? 'Night drive. Lights on, eyes open.' : 'Clear road. Enjoy the drive.' });
     }
     function clearDemo() {
-        const wasHw = demo.hardware && demo.active;
-        Object.assign(demo, DEMO_DEFAULT, { hardware: demo.hardware });
+        const wasActive = demo.active;
+        Object.assign(demo, DEMO_DEFAULT, { alerts: [], lanes: [0, 0, 0, 0] });   // fresh arrays: toggles mutate them
         saveDemo();
+        state.cleared.clear();   // hazards passed in the Test lab must not hide live sensor ones
         if (simTimer) stopDriving();
         refresh(true);
         setPop(false);
-        if (wasHw) api('/demo/reset', {}).catch(() => {});
+        if (wasActive) { clearTimeout(mirrorTimer); api('/hardware/push', { alerts: [] }).catch(() => {}); }
         toast('Demo filters cleared. Showing live sensors.');
         if (currentSheet === 'lab') renderSheet('lab');
     }
@@ -1320,8 +1330,11 @@
     let camTimer = null;
     function stopCamera() {
         clearInterval(camTimer); camTimer = null;
+        camDemoOn = false;
         const img = $('#cam-img');
         if (img) img.src = '';  // ends the MJPEG stream; it keeps downloading while the sheet is hidden otherwise
+        const video = $('#cam-demo-video');
+        if (video) video.pause();
     }
     const CAM_HEADING = { Left: '← left', Right: 'right →', Up: '↑ up', Down: '↓ down' };
     const CAM_STATUS_SEV = { Moving: 'good', Stopped: 'warn', Stalled: 'crit', 'Wrong way': 'crit', Toppled: 'crit' };
@@ -1378,24 +1391,70 @@
         paintIcons(strip);
     }
 
+    /* Recorded demo, used when the SentraX server cannot be reached (e.g. the hosted copy of the app):
+       the real camera pipeline's output on a toy-car clip, looped, with the panel data kept in step */
+    const CAM_DEMO = '/static/mobile/camera-demo';
+    let camDemo = null;          // recorded timeline once loaded
+    let camDemoOn = false;       // the open Camera AI sheet is showing the recording
+    async function startCamDemo() {
+        if (!camDemo) {
+            try { camDemo = await (await fetch(`${CAM_DEMO}/timeline.json`)).json(); } catch (_) { return false; }
+        }
+        if (camDemoOn || currentSheet !== 'camera') return true;
+        camDemoOn = true;
+        const img = $('#cam-img');
+        if (img) {
+            img.src = '';
+            img.insertAdjacentHTML('afterend', `<video id="cam-demo-video" src="${CAM_DEMO}/demo.webm" poster="${CAM_DEMO}/poster.jpg" autoplay muted loop playsinline aria-label="Recording of the camera AI tracking toy cars"></video>`);
+            img.remove();
+        }
+        $('#cam-demo-tag').hidden = false;
+        $('#cam-note').textContent = 'The live camera needs the SentraX server running on the laptop. This is a recording of the real AI tracking toy cars, playing on a loop.';
+        [$('#cam-det'), $('#cam-src')].forEach(el => { const sec = el && el.closest('.sec'); if (sec) sec.hidden = true; });
+        clearInterval(camTimer);
+        camTimer = setInterval(refreshCamDemo, 400);
+        return true;
+    }
+    async function refreshCamDemo() {
+        if (!(await startCamDemo()) || currentSheet !== 'camera') return;
+        const video = $('#cam-demo-video');
+        if (video && video.paused && !video.ended) video.play().catch(() => {});  // keep the loop going if the browser paused it
+        const t = video ? video.currentTime % camDemo.duration : 0;
+        let snap = camDemo.timeline[0];
+        for (const s of camDemo.timeline) { if (s.t <= t + 0.01) snap = s; else break; }
+        renderCamPanel({
+            demo: true, models: camDemo.models, camera_fps: camDemo.fps, vehicle_count: snap.vehicle_count,
+            speed_limit_kmh: camDemo.speed_limit_kmh, stall_threshold_seconds: camDemo.stall_threshold_seconds
+        }, { vehicles: snap.vehicles, summary: snap.summary });
+    }
+
     async function refreshCamera() {
+        if (camDemoOn) return refreshCamDemo();
         let s, log;
-        try { [s, log] = await Promise.all([api('/cv/stats'), api('/cv/vehicles')]); } catch (_) { return; }
+        try { [s, log] = await Promise.all([api('/cv/stats'), api('/cv/vehicles')]); } catch (_) { return refreshCamDemo(); }
         if (currentSheet !== 'camera') return;
+        renderCamPanel(s, log);
+        return s;
+    }
+
+    function renderCamPanel(s, log) {
         const d = s.detector || {};
         const limit = s.speed_limit_kmh ?? 4;
         let det;
-        if (d.active === 'YOLO_BYTETRACK') det = `<span class="tag tag-good">${esc((d.models || []).map(camModelName).join(' + ') || 'YOLO')} · ByteTrack</span>${String(d.device || '').startsWith('cuda') ? '<small>GPU</small>' : ''}`;
+        if (s.demo) det = `<span class="tag tag-good">${esc((s.models || []).map(camModelName).join(' + ') || 'YOLO')} · ByteTrack</span><small>recorded</small>`;
+        else if (d.active === 'YOLO_BYTETRACK') det = `<span class="tag tag-good">${esc((d.models || []).map(camModelName).join(' + ') || 'YOLO')} · ByteTrack</span>${String(d.device || '').startsWith('cuda') ? '<small>GPU</small>' : ''}`;
         else if (d.backend === 'auto' && d.load_error && !d.is_weights_loaded) det = '<span class="tag tag-crit">AI unavailable</span>';
         else if (d.backend === 'auto' && s.camera_connected && !d.is_weights_loaded) det = '<span class="tag tag-warn">Loading AI models...</span>';
         else det = '<span class="tag">Colour &amp; motion</span>';
+        const source = s.demo ? '<span class="tag tag-warn">Demo recording</span>'
+            : s.camera_connected ? `<small>${esc(s.device_name || 'Camera')}</small>` : '<span class="tag">Synthetic scene</span>';
         $('#cam-stats').innerHTML = `
             ${row('eye', 'Detector', det)}
-            ${row('camera', 'Source', s.camera_connected ? `<small>${esc(s.device_name || 'Camera')}</small>` : '<span class="tag">Synthetic scene</span>')}
+            ${row('camera', 'Source', source)}
             ${row('speed', 'Frame rate', `${Number(s.camera_fps || 0).toFixed(0)}<small>fps</small>`)}
             ${row('flag', 'Overspeed above', `${limit}<small>km/h</small>`)}
             ${row('warn', 'Stalled after standing still', `${s.stall_threshold_seconds ?? 3}<small>s</small>`)}`;
-        $('#cam-note').hidden = s.camera_connected || d.backend !== 'auto';
+        $('#cam-note').hidden = !s.demo && (s.camera_connected || d.backend !== 'auto');
         $$('#cam-det button').forEach(b => b.classList.toggle('is-active', b.dataset.det === s.detector_backend));
 
         const vehicles = log.vehicles || [];
@@ -1452,7 +1511,7 @@
 
         else if (name === 'camera') {
             body.innerHTML = `
-                <div class="cam-feed"><img id="cam-img" alt="Live camera with detected vehicles outlined" src="/api/cv/stream?t=${Date.now()}"></div>
+                <div class="cam-feed"><img id="cam-img" alt="Live camera with detected vehicles outlined" src="/api/cv/stream?t=${Date.now()}"><span class="cam-demo-tag" id="cam-demo-tag" hidden>Recorded demo</span></div>
                 <div class="cam-alert" id="cam-alert" role="status" hidden><span data-icon="siren"></span><span></span></div>
                 <div class="cam-log">
                     <div class="cam-log-head"><span class="sec-title" style="margin:0">Vehicles caught on camera</span><button class="cam-mini-btn" type="button" id="cam-clear">Clear</button></div>
@@ -1567,9 +1626,8 @@
                     <div class="sec-title" style="margin-top:14px">Lanes occupied (IR sensors)</div>
                     <div class="lane-toggles">${[0, 1, 2, 3].map(i => `<button class="chip ${demo.lanes[i] ? 'is-on' : ''}" type="button" data-lane="${i}">L${i + 1}</button>`).join('')}</div>
                 </div>
-                <div class="sec"><div class="rows">
-                    <label class="row-toggle row"><span>Also send to the ESP32 (sign + LEDs)</span><input type="checkbox" id="lab-hw" ${demo.hardware ? 'checked' : ''}><span class="switch"></span></label>
-                </div>
+                <div class="sec">
+                    <p class="note" style="margin:0">While the ESP32 is linked, its LED strip and E-Ink sign show these conditions too.</p>
                     <button class="btn" type="button" id="lab-drive" style="width:100%;margin-top:8px"><span data-icon="car"></span>${simTimer ? 'Stop the test drive' : 'Drive this route at the test speed'}</button>
                     <button class="btn" type="button" id="lab-expo" style="width:100%;margin-top:8px"><span data-icon="play"></span>Run the scripted 8-step expo demo</button>
                 </div>
@@ -1613,7 +1671,6 @@
             $$('[data-lane]', body).forEach(b => b.addEventListener('click', () => {
                 const i = Number(b.dataset.lane); demo.lanes[i] = demo.lanes[i] ? 0 : 1; demo.preset = null; applyDemo('toggle'); repaint();
             }));
-            $('#lab-hw').addEventListener('change', (e) => { demo.hardware = e.target.checked; saveDemo(); if (demo.active) mirrorToHardware(); });
             $('#lab-drive').addEventListener('click', () => {
                 if (simTimer) { stopDriving(); repaint(); return; }
                 if (!demo.active) applyDemo('toggle');
@@ -1652,6 +1709,26 @@
         else if (name === 'link') {
             const hw = state.hw;
             const e32 = hw?.esp32, e82 = hw?.esp8266;
+            const link = e32?.link || {}, diag = link.esp32 || {};
+            const fmtSecs = (n) => n >= 3600 ? `${Math.floor(n / 3600)} h ${Math.floor(n % 3600 / 60)} min` : n >= 60 ? `${Math.floor(n / 60)} min ${n % 60} s` : `${n} s`;
+            const drop = link.last_drop;
+            const calNote = !e32?.connected ? 'Link the ESP32 first.'
+                : !e32.firmware ? 'This ESP32 runs older firmware without calibration. Flash the new SentraX firmware to use it.'
+                : diag.calibration === 'running' ? 'Calibrating. Keep the road clear and quiet.'
+                : diag.calibration === 'calibrated' ? 'Calibrated for this room. Run it again if the lighting or room changes.'
+                : 'Using factory thresholds. Calibrate once the road is set up.';
+            const ledOk = Boolean(e32?.connected && e32.led_right != null);
+            const ledNote = !e32?.connected ? 'Link the ESP32 first.'
+                : e32.led_right == null ? 'Flash the new ESP32 firmware to line up the strips.'
+                : `Right-strip setting ${e32.led_right} (default 18)${e32.led_swap ? ', sides swapped' : ''}.`;
+            const health = [
+                e32?.connected && link.connected_for_s != null ? row('link', 'Linked for', fmtSecs(link.connected_for_s)) : '',
+                link.reconnecting ? row('warn', 'Bluetooth', '<span class="tag tag-warn">Reconnecting</span>') : '',
+                link.drops_this_session ? row('warn', 'Drops this session', `${link.drops_this_session}<small> · last after ${fmtSecs(drop.after_s)}</small>`) : '',
+                diag.firmware ? row('cube', 'Firmware', esc(diag.firmware)) : '',
+                diag.firmware ? row('warn', 'ESP32 drops since boot', `${diag.link_drops_since_boot}${diag.last_drop_reason ? `<small> · ${esc(diag.last_drop_reason)}</small>` : ''}`) : '',
+                diag.firmware ? row('gauge', 'Last restart', esc(diag.last_reset)) : ''
+            ].join('');
             body.innerHTML = `
                 <div class="sec"><div class="rows">
                     ${row('link', 'ESP32 controller', e32?.connected ? `<span class="tag tag-good">${esc(e32.transport)}</span>` : '<span class="tag">Not linked</span>')}
@@ -1666,6 +1743,23 @@
                     </div>
                     <div class="err" id="link-err" hidden></div>
                     <p class="note" style="margin-top:10px">The SentraX PC links to the ESP32. Keep its server window open. The ESP32 accepts one Bluetooth connection at a time.</p>
+                    <p class="note">The link reconnects by itself if it drops. If it keeps dropping, remove SENTRAX-ESP32 under Windows Settings > Bluetooth &amp; devices: the app connects without pairing.</p>
+                </div>
+                ${health ? `<div class="sec"><div class="sec-title">Link health</div><div class="rows">${health}</div></div>` : ''}
+                <div class="sec"><div class="sec-title">Calibrate to this room</div>
+                    <p class="note" style="margin-top:0">Clear the road and keep the room quiet, then press Calibrate. In about 6 seconds the ESP32 learns its IR sensors, empty-road ultrasonic distances, dry moisture, room temperature and humidity, and mic noise. It keeps them after a restart.</p>
+                    <button class="btn" type="button" id="hw-cal" ${e32?.connected && e32.firmware && diag.calibration !== 'running' ? '' : 'disabled'}><span data-icon="gauge"></span>Calibrate</button>
+                    <p class="note">${calNote}</p>
+                </div>
+                <div class="sec"><div class="sec-title">Line up the LED strips</div>
+                    <p class="note" style="margin-top:0">Shows the red stalled marker beside an IR sensor for 10 seconds. If the right strip's marker is not beside the car, move it. The setting is saved on the ESP32.</p>
+                    <div class="btn-grid" style="grid-template-columns:repeat(4,1fr)">${[1, 2, 3, 4].map(n => `<button class="btn" type="button" data-led-ir="${n}" ${ledOk ? '' : 'disabled'}>IR${n}</button>`).join('')}</div>
+                    <div class="btn-row" style="margin-top:8px">
+                        <button class="btn" type="button" data-led-move="1" ${ledOk ? '' : 'disabled'}>Right: toward IR1</button>
+                        <button class="btn" type="button" data-led-move="-1" ${ledOk ? '' : 'disabled'}>Right: away from IR1</button>
+                    </div>
+                    <button class="btn" type="button" id="led-swap" style="width:100%;margin-top:8px" ${ledOk ? '' : 'disabled'}>Swap sides (use if the left marker is the one that is off)</button>
+                    <p class="note" id="led-note">${ledNote}</p>
                 </div>
                 <div class="sec"><div class="sec-title">USB cable</div>
                     <div class="btn-row"><select class="btn" id="usb-port" style="appearance:none;text-align:left"><option value="">Looking for ports...</option></select>
@@ -1677,6 +1771,22 @@
                 try { await api('/ble/connect', {}); toast('ESP32 linked over Bluetooth'); vibrate(30); }
                 catch (e) { err.textContent = e.message; err.hidden = false; }
                 btn.disabled = false; pollHardware();
+            });
+            const ledSend = async (body) => {
+                try {
+                    const r = await api('/hardware/led', body);
+                    Object.assign(state.hw.esp32, { led_right: r.led_right, led_swap: r.led_swap });
+                    $('#led-note').textContent = `Right-strip setting ${r.led_right} (default 18)${r.led_swap ? ', sides swapped' : ''}.`;
+                } catch (e) { err.textContent = e.message; err.hidden = false; }
+            };
+            $$('[data-led-ir]', body).forEach(b => b.addEventListener('click', () => { ledIR = Number(b.dataset.ledIr); ledSend({ preview_ir: ledIR }); }));
+            $$('[data-led-move]', body).forEach(b => b.addEventListener('click', () => ledSend({ right: state.hw.esp32.led_right + Number(b.dataset.ledMove), preview_ir: ledIR })));
+            $('#led-swap').addEventListener('click', () => ledSend({ swap: !state.hw.esp32.led_swap, preview_ir: ledIR }));
+            $('#hw-cal').addEventListener('click', async (ev) => {
+                ev.currentTarget.disabled = true;
+                try { await api('/hardware/calibrate', {}); toast('Calibrating. Keep the road clear for 6 seconds.'); vibrate(30); }
+                catch (e) { err.textContent = e.message; err.hidden = false; }
+                setTimeout(pollHardware, 7000);
             });
             $('#ble-disconnect').addEventListener('click', async () => {
                 try { await api('/ble/disconnect', {}); toast('Bluetooth disconnected'); } catch (e) { toast(e.message); }

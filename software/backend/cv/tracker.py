@@ -50,6 +50,8 @@ class CentroidTracker:
         self.ref_length_m = ref_length_m
         self.ref_width_m = ref_width_m
         self.max_size_speed_kmh = 30.0
+        # Set by the camera each frame; a box touching the frame edge is a cut-off car whose size is no ruler
+        self.frame_size: Optional[Tuple[int, int]] = None
 
         # When the detector supplies its own track IDs (YOLO + ByteTrack), they decide which
         # detection belongs to which track instead of nearest-centroid matching.
@@ -368,8 +370,11 @@ class CentroidTracker:
             tinfo["is_stationary"] = False
             tinfo["stationary_duration"] = 0.0
             tinfo["is_toppled"] = False
+            x, y = d["bbox"][0], d["bbox"][1]
+            cut_off = x <= 2 or y <= 2 or (self.frame_size is not None and
+                                           (x + bw >= self.frame_size[0] - 2 or y + bh >= self.frame_size[1] - 2))
             # A fresh line-calibrated reading is kept for a moment before size-based readings resume
-            if span >= 0.15 and now - tinfo.get("lines_time", 0.0) > 1.5:
+            if span >= 0.15 and not cut_off and now - tinfo.get("lines_time", 0.0) > 1.5:
                 kmh = min(self.max_size_speed_kmh, disp_px * m_per_px / span * 3.6)
                 prev = tinfo["speed_kmh"] if tinfo.get("speed_source") == "SIZE" else kmh
                 tinfo["speed_kmh"] = 0.6 * kmh + 0.4 * prev

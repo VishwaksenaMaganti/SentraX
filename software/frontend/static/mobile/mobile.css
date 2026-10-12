@@ -411,6 +411,7 @@ input:checked + .switch::after { transform: translateX(16px); background: var(--
 }
 .btn-primary { background: var(--paint); color: var(--paint-ink); border-color: transparent; }
 .btn-danger { background: var(--brake-soft); color: #EF8A7B; border-color: transparent; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .btn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .note { font-size: 13px; color: var(--chalk-2); line-height: 1.45; }
@@ -449,7 +450,9 @@ input:checked + .switch::after { transform: translateX(16px); background: var(--
 
 /* Camera AI feed */
 .cam-feed { aspect-ratio: 4 / 3; width: min(100%, calc(42vh * 4 / 3)); margin: 0 auto; border-radius: 14px; overflow: hidden; background: #0D0B09; border: 1px solid var(--line); }
-.cam-feed img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.cam-feed { position: relative; }
+.cam-feed img, .cam-feed video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.cam-demo-tag { position: absolute; left: 8px; bottom: 8px; padding: 3px 8px; border-radius: 999px; font: 600 11px var(--font); color: var(--paint-ink); background: var(--paint); }
 .cam-alert { margin-top: 10px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--brake-soft); color: #EF8A7B; font-size: 14px; font-weight: 600; line-height: 1.35; }
 .cam-log { margin-top: 12px; padding: 10px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); }
 .cam-log-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }

@@ -8,6 +8,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_NeoPixel.h>
 #include <DHT.h>
+#include <Preferences.h>
 
 // =====================================================
 // ALERT TYPES
@@ -36,36 +37,7 @@ enum AlertType {
 #define IR3_PIN 27
 #define IR4_PIN 33
 
-// IR presence logic. The testbed's IR modules pull their output HIGH when a vehicle is in
-// the beam, so HIGH = vehicle detected. (Previous firmware treated LOW as detected, which
-// showed every lane inverted.) Change to LOW to restore the old behaviour.
-#define IR_ACTIVE_LEVEL HIGH
-#define irDetected(pin) (digitalRead(pin) == IR_ACTIVE_LEVEL)
-
 #define SOUND_PIN 32
-
-// Sound / impact sensor filter. The module's digital output chatters on room noise, so a single
-// blip no longer counts. Every SOUND_BURST_EVERY_MS the pin is sampled for SOUND_BURST_US and the
-// share of "active" samples (0-100 %) is the sound level. A collision needs a loud level held for
-// SOUND_CONFIRM_BURSTS bursts (~0.6-1.5 s): only a sustained loud source such as a phone speaker
-// held against the mic gets there. Raise SOUND_TRIGGER_PCT (or send "SOUND:THRESHOLD:<pct>" over
-// Serial/BLE) to make it even harder to trigger.
-#define SOUND_BURST_US        4000
-#define SOUND_BURST_EVERY_MS  50
-#define SOUND_TRIGGER_PCT     40    // level a burst must reach to count as loud
-#define SOUND_MIN_MARGIN_PCT  30    // ...and at least this far above the quiet level learnt at boot
-#define SOUND_CONFIRM_BURSTS  12    // net loud bursts needed before a collision fires
-#define SOUND_COOLDOWN_MS     8000  // minimum gap between two sound-triggered collisions
-
-int soundIdleLevel = HIGH;      // pin level in a quiet room (learnt at boot, works for either polarity)
-int soundBaselinePct = 0;       // activity measured in the quiet room at boot
-int soundTriggerPct = SOUND_TRIGGER_PCT;
-int soundLevelPct = 0;          // latest burst level, reported in telemetry as "snd"
-int soundLoudScore = 0;
-bool soundConfirmed = false;    // reported in telemetry as "sound"
-bool soundRearmed = true;
-unsigned long lastSoundBurst = 0;
-unsigned long lastSoundTrigger = 0;
 
 #define DHT_PIN 13
 #define DHTTYPE DHT11
@@ -146,6 +118,16 @@ unsigned long lastBLETelemetryTime = 0;
 bool rfidEmergencyActive = false;
 unsigned long lastESP8266Heartbeat = 0;
 
+// Advertising is restarted from loop(), not inside the Bluetooth callback: restarting it there
+// could fail and leave the ESP32 invisible (no reconnect possible) until it was power-cycled.
+volatile bool bleRestartAdvertising = false;
+unsigned long lastAdvertiseKick = 0;
+
+// BLE writes arrive on the Bluetooth task. They are queued and run from loop(), so the E-Ink,
+// LEDs and ESP8266 link are only ever driven from one task.
+struct BleCommand { char text[64]; };
+QueueHandle_t bleCommandQueue = NULL;
+
 class SentraXBLEServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
       bleClientConnected = true;
@@ -155,8 +137,7 @@ class SentraXBLEServerCallbacks: public BLEServerCallbacks {
     void onDisconnect(BLEServer* pServer) {
       bleClientConnected = false;
       Serial.println(F("[BLE] Client disconnected. Restarting advertising..."));
-      delay(50);
-      BLEDevice::startAdvertising();
+      bleRestartAdvertising = true;
     }
 };
 
@@ -165,9 +146,11 @@ void executeCommand(String cmd);
 class SentraXBLECommandCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
       String rxValue = pCharacteristic->getValue().c_str();
-      if (rxValue.length() > 0) {
-        rxValue.trim();
-        executeCommand(rxValue);
+      rxValue.trim();
+      if (rxValue.length() > 0 && bleCommandQueue != NULL) {
+        BleCommand c;
+        rxValue.toCharArray(c.text, sizeof(c.text));
+        xQueueSend(bleCommandQueue, &c, 0);
       }
     }
 };
@@ -216,6 +199,7 @@ unsigned long speedDisplayStart = 0;
 bool nightMode = false;
 
 // Sensor states
+bool lastCollision = false;
 bool lastIR3 = false;
 bool lastIR4 = false;
 bool lastWet = false;
@@ -271,6 +255,46 @@ void setMappedLED(int logicalLED, uint32_t color) {
   leds.setPixelColor(physicalLED(logicalLED), color);
 }
 
+// =====================================================
+// LEFT / RIGHT STRIP ALIGNMENT
+// Logical 0..29 runs along the LEFT side of the road, 30..59 along the RIGHT side. The chain
+// turns round at the end of the road, so the right side counts the opposite way: the right LED
+// beside left LED i is NOT i + 30 (that lit the right marker ~10 LEDs away from the car).
+// Calibrated from a top-down photo of the testbed with a stalled car at IR1: left LEDs 2..6
+// sat beside right LEDs 46..42, so right = 30 + (18 - i). The same rule lines up IR2's window.
+// The right run ends sooner, so markers beyond it stop at its last LED.
+// Tune on site without reflashing (saved in flash):
+//   LED:RIGHT:<n>   default 18; +1 moves every right-side marker one LED towards IR1
+//   LED:SWAP:1      if logical 30..59 actually runs along the left side
+//   LED:PREVIEW:<ir> shows the stalled marker for IR 1-4 for 10 s
+// =====================================================
+
+Preferences prefs;
+int ledRightMirror = 18;
+bool ledSidesSwapped = false;
+int ledPreviewIR = 0;               // IR whose marker is being previewed (0 = none)
+unsigned long ledPreviewUntil = 0;
+
+// Right-side logical LED beside left-side logical LED i (0..29)
+int rightBeside(int i) {
+  int k = ledRightMirror - i;
+  if (k < 0) k = 0;
+  if (k > 29) k = 29;
+  return 30 + k;
+}
+
+// Lights left LED i and the right LED beside it, so both sides mark the same spot
+void setPairLED(int i, uint32_t color) {
+  int left = i;
+  int right = rightBeside(i);
+  if (ledSidesSwapped) {
+    left = i + 30;
+    right -= 30;
+  }
+  setMappedLED(left, color);
+  setMappedLED(right, color);
+}
+
 void normalLEDs() {
   leds.clear();
   uint32_t amber = leds.Color(15, 7, 0);
@@ -302,9 +326,8 @@ void wrongWayLEDs() {
   leds.show();
 }
 
-void stalledLEDs() {
-  static bool flashState = false;
-  flashState = !flashState;
+// Amber strip with a red marker (on) beside the given IR sensor, on both sides of the road
+void drawStallMarker(int irIndex, bool on) {
   uint32_t red = leds.Color(255, 0, 0);
   uint32_t amber = leds.Color(15, 7, 0);
 
@@ -313,28 +336,34 @@ void stalledLEDs() {
     setMappedLED(i, amber);
   }
 
-  // Determine localized window (5 LEDs) around the stalled IR sensor
-  // IR1: 2..6 (and lane 2: 32..36)
-  // IR2: 10..14 (and lane 2: 40..44)
-  // IR3: 17..21 (and lane 2: 47..51)
-  // IR4: 24..28 (and lane 2: 54..58)
+  // Determine localized window (5 LEDs) around the stalled IR sensor, on the left run
+  // IR1: 2..6
+  // IR2: 10..14
+  // IR3: 17..21
+  // IR4: 24..28
+  // (the right-side LEDs come from rightBeside(), see STRIP ALIGNMENT)
   int startL = 2, endL = 6;
-  if (stalledIRIndex == 2) {
+  if (irIndex == 2) {
     startL = 10; endL = 14;
-  } else if (stalledIRIndex == 3) {
+  } else if (irIndex == 3) {
     startL = 17; endL = 21;
-  } else if (stalledIRIndex == 4) {
+  } else if (irIndex == 4) {
     startL = 24; endL = 28;
   }
 
-  // Flash only the localized LEDs near the stalled vehicle
-  if (flashState) {
+  // Light only the localized LEDs near the stalled vehicle
+  if (on) {
     for (int i = startL; i <= endL; i++) {
-      setMappedLED(i, red);
-      setMappedLED(i + 30, red);
+      setPairLED(i, red);
     }
   }
   leds.show();
+}
+
+void stalledLEDs() {
+  static bool flashState = false;
+  flashState = !flashState;
+  drawStallMarker(stalledIRIndex, flashState);
 }
 
 void congestionLEDs() {
@@ -836,7 +865,7 @@ void checkCongestion() {
   };
 
   for (int i = 0; i < 4; i++) {
-    if (irDetected(pins[i])) {
+    if (digitalRead(pins[i]) == LOW) {
       occupied++;
     }
   }
@@ -883,7 +912,7 @@ void checkStalledVehicle() {
 
   int occupied = 0;
   for (int i = 0; i < 4; i++) {
-    if (irDetected(pins[i])) {
+    if (digitalRead(pins[i]) == LOW) {
       occupied++;
     }
   }
@@ -903,7 +932,7 @@ void checkStalledVehicle() {
   bool anyStalled = false;
 
   for (int i = 0; i < 4; i++) {
-    bool blocked = irDetected(pins[i]);
+    bool blocked = (digitalRead(pins[i]) == LOW);
 
     if (blocked) {
       if (!irStallActive[i]) {
@@ -952,8 +981,8 @@ void checkStalledVehicle() {
 // =====================================================
 
 void checkWrongWay() {
-  bool ir3 = irDetected(IR3_PIN);
-  bool ir4 = irDetected(IR4_PIN);
+  bool ir3 = (digitalRead(IR3_PIN) == LOW);
+  bool ir4 = (digitalRead(IR4_PIN) == LOW);
 
   if (ir3 && !lastIR3) {
     if (!ir4FirstDetected) {
@@ -985,78 +1014,6 @@ void checkWrongWay() {
 // =====================================================
 // ULTRASONIC DISTANCE
 // =====================================================
-
-// =====================================================
-// SOUND / IMPACT SENSOR (filtered)
-// =====================================================
-
-// Share of samples (0-100 %) where the module output differs from its quiet level
-int sampleSoundActivityPct() {
-  unsigned long n = 0, active = 0;
-  unsigned long t0 = micros();
-  while (micros() - t0 < SOUND_BURST_US) {
-    n++;
-    if (digitalRead(SOUND_PIN) != soundIdleLevel) active++;
-  }
-  return n ? (int)((active * 100UL) / n) : 0;
-}
-
-// Learns the quiet level at boot. Keep the room quiet for the first second after power-on.
-void calibrateSoundSensor() {
-  unsigned long n = 0, high = 0;
-  unsigned long t0 = millis();
-  while (millis() - t0 < 600) {
-    n++;
-    if (digitalRead(SOUND_PIN) == HIGH) high++;
-    delayMicroseconds(200);
-  }
-  soundIdleLevel = (high * 2 >= n) ? HIGH : LOW;
-
-  int sum = 0;
-  for (int i = 0; i < 10; i++) {
-    sum += sampleSoundActivityPct();
-    delay(20);
-  }
-  soundBaselinePct = sum / 10;
-
-  Serial.print(F("[SOUND] Quiet level: "));
-  Serial.print(soundIdleLevel == HIGH ? "HIGH" : "LOW");
-  Serial.print(F(", quiet activity: "));
-  Serial.print(soundBaselinePct);
-  Serial.print(F("%, trigger at: "));
-  Serial.print(max(soundTriggerPct, soundBaselinePct + SOUND_MIN_MARGIN_PCT));
-  Serial.println(F("%"));
-}
-
-void checkSoundSensor() {
-  unsigned long now = millis();
-  if (now - lastSoundBurst < SOUND_BURST_EVERY_MS) return;
-  lastSoundBurst = now;
-
-  soundLevelPct = sampleSoundActivityPct();
-  int threshold = max(soundTriggerPct, soundBaselinePct + SOUND_MIN_MARGIN_PCT);
-  if (threshold > 95) threshold = 95;
-
-  // Loud bursts add a point, quiet ones take one away, so short blips and patchy room noise
-  // never build up; only a steady loud sound climbs to SOUND_CONFIRM_BURSTS.
-  if (soundLevelPct >= threshold) {
-    if (soundLoudScore < SOUND_CONFIRM_BURSTS * 2) soundLoudScore++;
-  } else if (soundLoudScore > 0) {
-    soundLoudScore--;
-  }
-
-  soundConfirmed = (soundLoudScore >= SOUND_CONFIRM_BURSTS);
-  if (soundLoudScore == 0) soundRearmed = true;  // sound has died away: allow the next trigger
-
-  if (soundConfirmed && soundRearmed && (now - lastSoundTrigger >= SOUND_COOLDOWN_MS)) {
-    soundRearmed = false;
-    lastSoundTrigger = now;
-    Serial.print(F("[SOUND] Sustained loud sound ("));
-    Serial.print(soundLevelPct);
-    Serial.println(F("%) -> COLLISION"));
-    triggerAlert(COLLISION);
-  }
-}
 
 float getDistance(int trig, int echo) {
   digitalWrite(trig, LOW);
@@ -1174,6 +1131,8 @@ void receiveESP8266() {
     if (msg == "ESP8266_READY") {
       lastESP8266Heartbeat = millis();
       LinkSerial.println("ESP32_READY");
+    } else if (msg == "ESP8266_HEARTBEAT") {
+      lastESP8266Heartbeat = millis();  // sent every 1.5 s; without it the app showed the ESP8266 offline
     } else if (msg == "NIGHT") {
       lastESP8266Heartbeat = millis();
       nightMode = true;
@@ -1209,18 +1168,6 @@ void executeCommand(String cmd) {
         triggerAlert(RASH_DRIVING);
       }
     }
-  }
-  else if (cmd.startsWith("SOUND:THRESHOLD:")) {
-    int pct = cmd.substring(16).toInt();
-    if (pct >= 5 && pct <= 95) {
-      soundTriggerPct = pct;
-      Serial.print(F("[SOUND] Trigger level set to "));
-      Serial.print(pct);
-      Serial.println(F("%"));
-    }
-  }
-  else if (cmd.startsWith("SOUND:CALIBRATE")) {
-    calibrateSoundSensor();
   }
   else if (cmd.startsWith("CHECK:SPEED") || cmd.startsWith("SPEED:CHECK") || cmd.startsWith("CHECK:US")) {
     triggerManualSpeedCheck();
@@ -1282,6 +1229,24 @@ void executeCommand(String cmd) {
     manualAlertStart = millis();
     triggerAlert(EMERGENCY);
   }
+  else if (cmd.startsWith("LED:RIGHT:") || cmd.startsWith("LED:SWAP:") || cmd.startsWith("LED:PREVIEW:")) {
+    // Strip alignment, tuned from the dashboard while watching the road (see STRIP ALIGNMENT)
+    int value = cmd.substring(cmd.lastIndexOf(':') + 1).toInt();
+    if (cmd.startsWith("LED:RIGHT:") && value >= 0 && value <= 59) {
+      ledRightMirror = value;
+      prefs.putInt("ledRight", value);
+    } else if (cmd.startsWith("LED:SWAP:")) {
+      ledSidesSwapped = (value != 0);
+      prefs.putBool("ledSwap", ledSidesSwapped);
+    } else if (value >= 1 && value <= 4) {
+      ledPreviewIR = value;
+    }
+    if (ledPreviewIR == 0) ledPreviewIR = stallAlertActive ? stalledIRIndex : 1;
+    ledPreviewUntil = millis() + 10000;
+    drawStallMarker(ledPreviewIR, true);
+    Serial.printf("[LED] Right marker rule %d, sides %s, previewing IR%d\n",
+                  ledRightMirror, ledSidesSwapped ? "swapped" : "normal", ledPreviewIR);
+  }
   else if (cmd.startsWith("ALERT:NORMAL") || cmd.startsWith("ALERT:CLEAR") || cmd.startsWith("RESET")) {
     manualAlertActive = false;
     activeAlert = NORMAL;
@@ -1306,6 +1271,21 @@ void checkSerialCommands() {
       executeCommand(cmd);
     }
   }
+  BleCommand c;
+  while (bleCommandQueue != NULL && xQueueReceive(bleCommandQueue, &c, 0) == pdTRUE) {
+    executeCommand(String(c.text));
+  }
+}
+
+// Keeps the ESP32 discoverable whenever no app is connected
+void maintainAdvertising() {
+  bool noClient = (pBLEServer == NULL || pBLEServer->getConnectedCount() == 0);
+  if (noClient) bleClientConnected = false;
+  if ((bleRestartAdvertising && noClient) || (noClient && millis() - lastAdvertiseKick >= 8000)) {
+    bleRestartAdvertising = false;
+    lastAdvertiseKick = millis();
+    BLEDevice::startAdvertising();
+  }
 }
 
 // =====================================================
@@ -1316,8 +1296,19 @@ void setup() {
   // 1. SERIAL & BLE INITIALIZATION
   Serial.begin(115200);
 
+  // Saved LED strip alignment (see STRIP ALIGNMENT)
+  prefs.begin("sentrax", false);
+  ledRightMirror = prefs.getInt("ledRight", 18);
+  ledSidesSwapped = prefs.getBool("ledSwap", false);
+
+  bleCommandQueue = xQueueCreate(8, sizeof(BleCommand));
+
   BLEDevice::init("SENTRAX-ESP32");
   BLEDevice::setMTU(517);
+  // Strongest radio setting (+9 dBm): the PC measured this board at -87 dBm, at the edge of range
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9);
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9);
 
   // Security config: Just-Works mode prevents Windows AccessDenied GATT restrictions
   BLESecurity *pSecurity = new BLESecurity();
@@ -1367,6 +1358,7 @@ void setup() {
   pBLEAdvertising->setMinPreferred(0x06);
   pBLEAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
+  lastAdvertiseKick = millis();
   Serial.println(F("[SENTRAX] BLE Active. Broadcast Name: SENTRAX-ESP32"));
 
   // 2. HARDWARE SERIAL LINK TO ESP8266
@@ -1383,9 +1375,8 @@ void setup() {
   pinMode(IR3_PIN, INPUT);
   pinMode(IR4_PIN, INPUT);
 
-  // 4. SOUND / COLLISION SENSOR (polarity and quiet level learnt at boot)
+  // 4. SOUND / COLLISION SENSOR (ACTIVE LOW)
   pinMode(SOUND_PIN, INPUT);
-  calibrateSoundSensor();
 
   // 5. MOISTURE SENSOR
   pinMode(MOISTURE_PIN, INPUT);
@@ -1428,8 +1419,17 @@ void setup() {
 // =====================================================
 
 void loop() {
-  // Check USB Serial commands
+  // Check USB Serial commands (and commands queued from Bluetooth)
   checkSerialCommands();
+
+  // Stay discoverable while no app is connected
+  maintainAdvertising();
+
+  // LED alignment preview ends: back to the pattern of whatever is active
+  if (ledPreviewIR != 0 && millis() >= ledPreviewUntil) {
+    ledPreviewIR = 0;
+    if (activeAlert == NORMAL) normalLEDs();
+  }
 
   // ESP8266 Inter-board communication
   receiveESP8266();
@@ -1446,8 +1446,12 @@ void loop() {
   // Stalled vehicle detection
   checkStalledVehicle();
 
-  // Collision / Sound sensor: fires only on a sustained loud sound (see checkSoundSensor)
-  checkSoundSensor();
+  // Collision / Sound sensor (ACTIVE LOW)
+  bool collision = (digitalRead(SOUND_PIN) == LOW);
+  if (collision && !lastCollision) {
+    triggerAlert(COLLISION);
+  }
+  lastCollision = collision;
 
   // Vehicle speed measurement (Ultrasonic sensors)
   checkVehicleSpeed();
@@ -1592,10 +1596,10 @@ void loop() {
   if (millis() - lastBLETelemetryTime >= 400) {
     lastBLETelemetryTime = millis();
 
-    int ir1 = irDetected(IR1_PIN) ? 1 : 0;
-    int ir2 = irDetected(IR2_PIN) ? 1 : 0;
-    int ir3 = irDetected(IR3_PIN) ? 1 : 0;
-    int ir4 = irDetected(IR4_PIN) ? 1 : 0;
+    int ir1 = (digitalRead(IR1_PIN) == LOW) ? 1 : 0;
+    int ir2 = (digitalRead(IR2_PIN) == LOW) ? 1 : 0;
+    int ir3 = (digitalRead(IR3_PIN) == LOW) ? 1 : 0;
+    int ir4 = (digitalRead(IR4_PIN) == LOW) ? 1 : 0;
 
     String alertStr = "NORMAL";
     if (activeAlert == COLLISION) alertStr = "COLLISION";
@@ -1614,13 +1618,13 @@ void loop() {
     teleJson += "\"speed\":" + String(measuredVehicleSpeed, 1) + ",";
     teleJson += "\"rec_speed\":" + String((int)permittedSpeed) + ",";
     teleJson += "\"ir\":[" + String(ir1) + "," + String(ir2) + "," + String(ir3) + "," + String(ir4) + "],";
-    teleJson += "\"irfix\":1,";
+    teleJson += "\"irfix\":1,";  // ir already means 1 = vehicle present: the dashboard must not flip it
+    teleJson += "\"ledr\":" + String(ledRightMirror) + ",";
+    teleJson += "\"ledw\":" + String(ledSidesSwapped ? 1 : 0) + ",";
     teleJson += "\"temp\":" + String(isnan(temperature) ? 26.5 : temperature, 1) + ",";
     teleJson += "\"hum\":" + String(isnan(humidity) ? 55.0 : humidity, 0) + ",";
     teleJson += "\"moist\":" + String(moisture) + ",";
-    teleJson += "\"sound\":" + String(soundConfirmed ? 1 : 0) + ",";
-    teleJson += "\"snd\":" + String(soundLevelPct) + ",";
-    teleJson += "\"sndfix\":1,";
+    teleJson += "\"sound\":" + String(collision ? 1 : 0) + ",";
     teleJson += "\"rfid\":" + String((activeAlert == EMERGENCY || rfidEmergencyActive) ? 1 : 0) + ",";
     teleJson += "\"night\":" + String(nightMode ? 1 : 0) + ",";
     teleJson += "\"esp8266\":" + String(esp8266Online ? 1 : 0) + ",";

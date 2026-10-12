@@ -29,9 +29,10 @@ class Settings(BaseModel):
     # (e.g. the RFID emergency LED sweep + E-Ink refresh). Within this window a silent but
     # connected controller keeps its last reading instead of being treated as unplugged.
     TELEMETRY_STALL_TOLERANCE_SECONDS: float = 12.0
-    # The IR modules on the testbed report the opposite of the firmware's "1 = vehicle" mapping,
-    # so the dashboard flips every IR reading on arrival. Set SENTRAX_IR_INVERTED=false to undo.
-    IR_INVERTED: bool = os.getenv("SENTRAX_IR_INVERTED", "true").lower() == "true"
+    # The flashed ESP32 firmware already reports "1 = vehicle" (its IR modules pull LOW in the
+    # beam), so readings pass through unchanged. Flipping them made four empty lanes read as
+    # "4 of 4 occupied". Set SENTRAX_IR_INVERTED=true only for firmware that reports inverted IR.
+    IR_INVERTED: bool = os.getenv("SENTRAX_IR_INVERTED", "false").lower() == "true"
     # How long the dashboard shows an emergency vehicle after an RFID scan is detected.
     EMERGENCY_HOLD_SECONDS: float = 8.0
     # How long a new vehicle speed reading is shown (matches the ESP32's E-Ink speed display).
